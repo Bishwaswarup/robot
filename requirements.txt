@@ -1,0 +1,6 @@
+mujoco>=3.2
+numpy>=1.24
+# optional
+imageio>=2.30        # examples/record_video.py
+imageio-ffmpeg>=0.4  # examples/record_video.py
+pytest>=7            # tests/

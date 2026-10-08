@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "go1-bezier"
+version = "0.1.0"
+description = "Bezier-trot low-level controller and pose control for Unitree Go1 in MuJoCo (base for gait-aware quadruped swarm research)"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = ["mujoco>=3.2", "numpy>=1.24"]
+
+[project.optional-dependencies]
+video = ["imageio>=2.30", "imageio-ffmpeg>=0.4"]
+test = ["pytest>=7"]
+
+[tool.setuptools]
+packages = ["go1_bezier"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
