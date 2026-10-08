@@ -27,6 +27,7 @@ The model is looked up at `./mujoco_menagerie`; override with `MENAGERIE_PATH=/p
 | `python scripts/pilot_phase.py` | Pilot: does disturbance response depend on gait phase? (`--quick` for a 1-min test) |
 | `python scripts/capability_map.py` | Build + validate the capability map from the pilot CSV; phase-aware timing analysis |
 | `python scripts/push_envelope.py` | Measure the push-capability envelope J_max(direction, phase, speed) by bisection (`--quick` ≈ 2 min) |
+| `python scripts/commander_eval.py` | Closed-loop test of phase-aware command timing vs. immediate release / slew limiter (`--quick` ≈ 1 min) |
 | `pytest` | Unit + physics tests |
 
 On macOS the viewer needs `mjpython` (installed with `mujoco`); on Linux/Windows use `python`.
@@ -54,6 +55,7 @@ go1_bezier/      controller package
   tricks.py        the sit/wave/height routine
   sim_utils.py     load one robot or a team (shared meshes), foot friction
   capability.py    CapabilityMap (tilt/fall/recovery/slip vs. phase) and PushEnvelope (J_max)
+  commander.py     PhaseAwareCommander: swarm-layer -> robot, releases big changes at the best phase
 data/            capability_map_bezier.npz, push_envelope_bezier.npz (built from experiments)
 examples/        viewer demos, video recording
 scripts/         headless evaluation scripts

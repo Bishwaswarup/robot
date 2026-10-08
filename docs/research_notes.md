@@ -169,7 +169,38 @@ Design: 2 speeds × 16 directions × 16 phases × 3 repeats, bisection 60–320 
 for all probes of one bisection; monotonicity spot check at 0.85·J / 1.15·J; agreement
 with pilot falls; maps in absolute direction and relative to the stance diagonal
 (both half-cycles pooled by mirror symmetry).
-Smoke test (4 dirs × 4 phases, v0 0.4, 1 repeat): J_fall 149–275 N, J_safe 145–194 N;
-monotonicity 100% / 95%; predicts 96.4% of pilot push outcomes. Full run pending.
+
+### Push envelope result (full run, 3072 bisections, 2026-10-08)
+- Clean thresholds: monotonicity check 99% pass at 0.85·J, 98% fail at 1.15·J;
+  repeat-to-repeat std 1.9 N; 40/1536 fall-cells censored above 320 N.
+- J_fall median ~215 N (125–≥320 N); J_safe (no fall, tilt ≤ 20°) median 167 N (101–317 N).
+- Phase swing per direction: median 106–121 N (fall), 84–109 N (safe).
+- Knowing the phase: mean allowable push / phase-blind worst case = 1.33× (fall),
+  1.38–1.44× (safe).
+- Mirror symmetry r = 0.991 (fall), 0.984 (safe).
+- The envelope explains the pilot: "falls iff F > J_fall" matches 98.6% of 3072
+  pilot push trials.
+- **Effective support axis (physical model).** The direction the robot tolerates best
+  rotates during stance from ≈ +25° (just after touchdown) to ≈ +65° (mid-stance), and
+  +68° is the axis of the *next* diagonal. So the robot best resists pushes along the
+  diagonal that will catch it. Model J = J0(ψ) + A(ψ)·cos 2(θr − α(ψ)): held-out
+  R² 0.82–0.84 (fall), 0.68–0.82 (safe); 4 harmonics 0.89–0.95; full 16×16 table
+  0.96–0.97. → interpretable model for the paper, table for control.
+- Relevance: a walking-speed bump between two Go1s (~3 N·s ≈ 30 N for 0.1 s) is far
+  below J_max; the envelope matters for hard impacts and as a phase-dependent margin.
+
 Note: thresholds (tilt 20°) still arbitrary; a walking-speed bump between two Go1s is
 ~3 N·s (≈ 30 N for 0.1 s), far below J_max → J_max matters for hard impacts.
+
+### Closed-loop phase-aware commander (go1_bezier/commander.py, scripts/commander_eval.py)
+Small changes (< 0.15 m/s) pass through; a large change is held ≤ ½ gait period and
+released at the phase minimising predicted tilt + 50°·P(fall) (capability map);
+`urgent=True` bypasses (imminent collision). Strategies compared on identical
+conditions/timings/noise (paired): raw, limiter (old default), phase, phase+limiter.
+Metrics from the REQUEST: t50/t90 of the velocity change (half-period smoothing),
+peak tilt, falls, settle; plus a 60 s 10 Hz random-command stream test.
+Smoke test (v0 0.4, 4 directions, 0.6 m/s, 16 paired trials): phase vs limiter: tilt
+equal (+0.0°, CI ±1°), t50 −0.09 s, t90 −0.13 s (CI excludes 0); phase+limiter vs
+limiter: tilt −1.1° but t50 +0.09 s. → combined with the limiter, phase timing gives
+lower tilt; without it, the same tilt as the limiter with a faster response. Full run pending. (Offline prediction was tilt −0.4…−0.7° at
+faster settle; live, the tilt benefit is smaller.)

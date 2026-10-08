@@ -64,3 +64,27 @@ def test_team_loads_and_stands():
             c.step()
         mujoco.mj_step(m, d)
     assert all(c.base_pose()[0][2] > 0.2 for c in cs)
+
+
+@needs_model
+def test_commander_waits_at_most_max_wait():
+    import os
+    from go1_bezier import CapabilityMap
+    from go1_bezier.commander import PhaseAwareCommander
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "capability_map_bezier.npz")
+    m, d = load_single()
+    c = Go1BezierController(m, d)
+    com = PhaseAwareCommander(c, CapabilityMap.load(path), "phase", max_wait=0.5)
+    com.request(0.4, 0, 0)
+    for _ in range(1000):
+        com.step(); mujoco.mj_step(m, d)
+    com.request(0.4, 0.05, 0)                       # small change -> immediate
+    assert not com.waiting and abs(c.cmd_target[1] - 0.05) < 1e-9
+    com.request(0.4, 0.35, 0)                       # large change -> scheduled
+    steps = 0
+    while com.waiting:
+        com.step(); mujoco.mj_step(m, d); steps += 1
+    assert steps * m.opt.timestep <= 0.5 * c.gait.period + 1e-6
+    assert abs(c.cmd_target[1] - 0.35) < 1e-9
+    com.request(0.0, -0.3, 0, urgent=True)          # urgent -> immediate
+    assert not com.waiting and abs(c.cmd_target[1] + 0.3) < 1e-9

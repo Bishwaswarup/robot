@@ -4,8 +4,9 @@ from .gait import BezierTrotGait
 from .controller import Go1BezierController
 from .poses import PoseSequencer, Keyframe
 from .capability import CapabilityMap, PushEnvelope
+from .commander import PhaseAwareCommander
 from .sim_utils import load_single, load_team, make_arena, set_foot_friction
 
 __all__ = ["LEGS", "leg_ik", "leg_fk", "body_ik", "BezierTrotGait", "Go1BezierController",
            "PoseSequencer", "Keyframe", "load_single", "load_team", "make_arena",
-           "set_foot_friction", "CapabilityMap", "PushEnvelope"]
+           "set_foot_friction", "CapabilityMap", "PushEnvelope", "PhaseAwareCommander"]
