@@ -14,6 +14,15 @@ pip install -r requirements.txt
 ```
 The model is looked up at `./mujoco_menagerie`; override with `MENAGERIE_PATH=/path/to/mujoco_menagerie`.
 
+## Publish to GitHub
+With the GitHub CLI installed and authenticated (`gh auth login`), create a
+private repository and push the current branch:
+```bash
+bash scripts/publish_github.sh
+```
+Pass a different repository name as the first argument if needed. If `origin`
+is already configured, the script pushes to it instead of creating a repository.
+
 ## Run
 | Command | What it does |
 |---|---|
