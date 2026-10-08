@@ -89,6 +89,8 @@ def parse_strategy(strategy):
     Returns GaitAwareLimiter kwargs, or None for the commander's own strategies."""
     base, _, lead = strategy.partition("@")
     lead = float(lead) if lead else 0.0
+    if base.startswith("phase+gaslc_"):                  # timing + shaped limiter
+        return dict(mode=base.split("_", 1)[1], source="cmd", phase_lead=lead, _commander="phase+limiter")
     if base.startswith("limiter*"):
         return dict(mode="uniform", uniform=float(base.split("*")[1]))
     if base.startswith("gaslc_"):
@@ -105,6 +107,7 @@ def make_commander(ctrl, strategy, cmap, envelope, cache=None):
     if kw is None:
         return PhaseAwareCommander(ctrl, cmap, strategy, envelope=envelope)
     cache = {} if cache is None else cache
+    com_strategy = kw.pop("_commander", "gasl_fast")
     if strategy not in cache:
         cache[strategy] = GaitAwareLimiter(envelope, cmap=cmap, **kw)
-    return PhaseAwareCommander(ctrl, cmap, "gasl_fast", envelope=envelope, gasl=cache[strategy])
+    return PhaseAwareCommander(ctrl, cmap, com_strategy, envelope=envelope, gasl=cache[strategy])

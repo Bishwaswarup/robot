@@ -88,3 +88,22 @@ def test_commander_waits_at_most_max_wait():
     assert abs(c.cmd_target[1] - 0.35) < 1e-9
     com.request(0.0, -0.3, 0, urgent=True)          # urgent -> immediate
     assert not com.waiting and abs(c.cmd_target[1] + 0.3) < 1e-9
+
+
+@needs_model
+def test_commander_respects_deadline():
+    import os
+    from go1_bezier import CapabilityMap
+    from go1_bezier.commander import PhaseAwareCommander
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "capability_map_bezier.npz")
+    m, d = load_single()
+    c = Go1BezierController(m, d)
+    com = PhaseAwareCommander(c, CapabilityMap.load(path), "phase+limiter", max_wait=0.5)
+    com.request(0.4, 0, 0)
+    for _ in range(1000):
+        com.step(); mujoco.mj_step(m, d)
+    com.request(0.4, 0.35, 0, deadline=0.05)
+    steps = 0
+    while com.waiting:
+        com.step(); mujoco.mj_step(m, d); steps += 1
+    assert steps * m.opt.timestep <= 0.05 + 2 * m.opt.timestep   # step granularity

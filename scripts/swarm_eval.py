@@ -1,5 +1,16 @@
 """Swarm test: ORCA + formation layer driving Go1s through the command-timing strategies.
 
+Configurations are "layer:strategy[:q]":
+  layer     reactive   | ORCA on the current situation, change requested immediately
+            predictive | ORCA solved for the situation one lookahead ahead (own position
+                         extrapolated with the current command); the change is requested with
+                         a deadline = lookahead, so timing strategies can pick the gait phase.
+                         If the CURRENT command is unsafe (TTC < urgent-ttc) it falls back to
+                         reactive + urgent.
+  strategy  any commander / limiter strategy (limiter, phase+limiter, phase+gaslc_equal, ...)
+  q         bottleneck queueing: near obstacles the robot further back yields
+            (ORCA responsibility 0.9 / 0.1 instead of 0.5 / 0.5)
+
 Every robot: local sensing (neighbours within 4 m, measured velocities), ORCA at 10 Hz,
 heading control, then  commander.request(vx, vy, wz, urgent)  ->  Bezier controller.
 urgent = predicted time-to-collision with the CURRENT command < --urgent-ttc (skip waiting).
@@ -10,7 +21,7 @@ centre distance, falls, tilt (mean, p99), and how many command changes were "big
 many were inside the capability map's domain, how many were urgent.
 
 Run:  python scripts/swarm_eval.py --quick          (~3 min)
-      python scripts/swarm_eval.py                  (4 scenarios x 4 strategies x 3 seeds)
+      python scripts/swarm_eval.py                  (4 scenarios x 5 configs x 5 seeds)
 Out:  results/swarm_eval.csv, results/swarm_summary.txt, results/swarm_paths_*.png
 """
 import os
@@ -30,7 +41,7 @@ warnings.filterwarnings("ignore", message="Mean of empty slice")
 from go1_bezier import load_team, make_arena, Go1BezierController, CapabilityMap, PushEnvelope
 from go1_bezier.gasl import make_commander
 from go1_bezier.commander import PhaseAwareCommander
-from go1_bezier.swarm import SwarmAgent, goal_velocity, elastic_scale
+from go1_bezier.swarm import SwarmAgent, goal_velocity, elastic_scale, queue_responsibility
 from go1_bezier.scenarios import SCENARIOS, R_ROBOT, add_obstacles
 
 ROOT = os.path.join(HERE, "..")
@@ -60,7 +71,17 @@ def ttc(p, v, others, R):
     return best
 
 
+def parse_config(cfg):
+    parts = cfg.split(":")
+    if len(parts) == 1:
+        return "reactive", parts[0], 0
+    return parts[0], parts[1], int(len(parts) > 2 and parts[2] == "q")
+
+
 def run(job):
+    layer, strategy, queue = parse_config(job["config"])
+    job = dict(job, strategy=strategy)
+    look = job.get("lookahead", 0.36)
     sc = SCENARIOS[job["scenario"]]()
     rng = np.random.default_rng(job["seed"])
     starts = [(x + rng.normal(0, 0.05), y + rng.normal(0, 0.05), yaw) for x, y, yaw in sc["starts"]]
@@ -104,21 +125,35 @@ def run(job):
                 if fallen[i]:
                     continue
                 if sc["plan"] is not None:
-                    lam = elastic_scale(pos[i], sc["plan"].heading, sc["obstacles"]) if job.get("elastic", 1) else 1.0
-                    v_pref = sc["plan"].preferred_velocity(i, pos[i], t, lam)
-                    target, _ = sc["plan"].slot(i, t, lam)
+                    plan = sc["plan"]
+                    lam = elastic_scale(pos[i], plan.heading, sc["obstacles"]) if job.get("elastic", 1) else 1.0
+                    target, _ = plan.slot(i, t, lam)
+                    heading = plan.heading
+                    pref_now = (lambda q, i=i, lam=lam, plan=plan: plan.preferred_velocity(i, q, t, lam))
+                    pref_ahead = (lambda q, i=i, lam=lam, plan=plan: plan.preferred_velocity(i, q, t + look, lam))
+                    in_bn = lam < 0.6
                 else:
-                    v_pref = goal_velocity(pos[i], sc["goals"][i])
                     target = np.asarray(sc["goals"][i])
+                    heading = np.arctan2(*(target - pos[i])[::-1])
+                    pref_now = pref_ahead = (lambda q, g=target: goal_velocity(q, g))
+                    in_bn = False
                 far = np.linalg.norm(target - pos[i]) > 1.0
                 nbs = [(pos[j], vel[j] if not fallen[j] else np.zeros(2), R_ROBOT) for j in range(N) if j != i]
-                v_w = agents[i].velocity(pos[i], v_pref, nbs, sc["obstacles"], far)
-                cmd = agents[i].body_command(v_w, yaws[i])
+                if queue:
+                    nbs = queue_responsibility(pos[i], heading, nbs, in_bn)
                 applied = ctrls[i].cmd_target
                 Rz = np.array([[np.cos(yaws[i]), -np.sin(yaws[i])], [np.sin(yaws[i]), np.cos(yaws[i])]])
-                urgent = ttc(pos[i], Rz @ applied[:2], nbs + [(q, np.zeros(2), r) for q, r in sc["obstacles"]],
+                v_cmd = Rz @ applied[:2]
+                urgent = ttc(pos[i], v_cmd, [n[:3] for n in nbs] + [(q, np.zeros(2), r) for q, r in sc["obstacles"]],
                              R_ROBOT) < job["urgent_ttc"]
-                coms[i].request(*cmd, urgent=bool(urgent))
+                if layer == "predictive" and not urgent:
+                    v_w = agents[i].predictive(pos[i], v_cmd, pref_ahead, nbs, sc["obstacles"], look, far)
+                    deadline = look
+                else:
+                    v_w = agents[i].velocity(pos[i], pref_now(pos[i]), nbs, sc["obstacles"], far)
+                    deadline = None
+                cmd = agents[i].body_command(v_w, yaws[i])
+                coms[i].request(*cmd, urgent=bool(urgent), deadline=deadline)
             if paths is not None and k % (5 * tick) == 0:
                 for i in range(N):
                     paths[i].append(pos[i].tolist())
@@ -190,15 +225,15 @@ def analyse(rows, out):
     P("=" * 110)
     for sc in [s for s in SCENARIOS if any(r["scenario"] == s for r in rows)]:
         P(f"\n{sc}")
-        P(f"  {'strategy':13s} {'success':>7s} {'time':>7s} {'falls':>5s} {'robot-robot':>11s} {'robot-obst':>10s} "
+        P(f"  {'config':30s} {'success':>7s} {'time':>7s} {'falls':>5s} {'robot-robot':>11s} {'robot-obst':>10s} "
           f"{'min dist':>8s} {'tilt':>6s} {'p99':>6s} {'max':>6s} | {'big/rob/min':>11s} {'in-domain':>9s} "
           f"{'urgent':>7s} {'wait':>6s}")
-        for s in dict.fromkeys(r["strategy"] for r in rows):
-            R = [r for r in rows if r["scenario"] == sc and r["strategy"] == s]
+        for s in dict.fromkeys(r["config"] for r in rows):
+            R = [r for r in rows if r["scenario"] == sc and r["config"] == s]
             if not R:
                 continue
             g = lambda k: np.array([f(r, k) for r in R])
-            P(f"  {s:13s} {100 * np.mean(g('success')):6.0f}% {np.nanmean(g('time')):6.1f}s {np.sum(g('falls')):5.0f} "
+            P(f"  {s:30s} {100 * np.mean(g('success')):6.0f}% {np.nanmean(g('time')):6.1f}s {np.sum(g('falls')):5.0f} "
               f"{np.mean(g('rr_contacts')):11.1f} {np.mean(g('ro_contacts')):10.1f} {np.min(g('min_dist')):7.2f}m "
               f"{np.mean(g('mean_tilt')):5.2f}° {np.mean(g('p99_tilt')):5.1f}° {np.max(g('max_tilt')):5.1f}° | "
               f"{np.mean(g('big_per_robot_min')):11.1f} {100 * np.mean(g('in_domain_frac')):8.0f}% "
@@ -220,8 +255,8 @@ def plot_paths(results, out):
         R = [r for r in results if r["scenario"] == sc and "paths" in r]
         if not R:
             return
-        order = list(dict.fromkeys(r["strategy"] for r in results))
-        R = sorted(R, key=lambda r: order.index(r["strategy"]))
+        order = list(dict.fromkeys(r["config"] for r in results))
+        R = sorted(R, key=lambda r: order.index(r["config"]))
         fig, axes = plt.subplots(1, len(R), figsize=(4.2 * len(R), 4.2), squeeze=False)
         obst = SCENARIOS[sc]()["obstacles"]
         cmap = plt.get_cmap("tab10")
@@ -234,7 +269,7 @@ def plot_paths(results, out):
             for (x, y), rad in obst:
                 ax.add_patch(plt.Circle((x, y), rad, color="#8a6a4a"))
             ax.set_aspect("equal")
-            ax.set_title(f"{r['strategy']}: falls {r['falls']}, contacts {r['rr_contacts']}", fontsize=9)
+            ax.set_title(f"{r['config']}\nfalls {r['falls']}, contacts {r['rr_contacts']}", fontsize=8)
             ax.grid(alpha=0.2)
         fig.suptitle(f"{sc} - robot paths (seed 0)", fontsize=10)
         fig.tight_layout()
@@ -249,7 +284,9 @@ def main():
     ap.add_argument("--quick", action="store_true")
     ap.add_argument("--seeds", type=int, default=5)
     ap.add_argument("--scenarios", default=",".join(SCENARIOS))
-    ap.add_argument("--strategies", default="raw,limiter,limiter*1.35,gaslc_equal,gaslc_x1.35")
+    ap.add_argument("--configs", default="reactive:limiter,reactive:limiter:q,predictive:limiter:q,"
+                                         "predictive:phase+limiter:q,predictive:phase+gaslc_equal:q")
+    ap.add_argument("--lookahead", type=float, default=0.36, help="s (one gait period)")
     ap.add_argument("--urgent-ttc", type=float, default=0.8)
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 1))
     ap.add_argument("--out", default=os.path.join(ROOT, "results"))
@@ -262,15 +299,16 @@ def main():
     else:
         scen = ["swap4", "swap8"] if a.quick else a.scenarios.split(",")
         seeds = 1 if a.quick else a.seeds
-        jobs = [dict(scenario=s, strategy=st, seed=sd, urgent_ttc=a.urgent_ttc, record=int(sd == 0))
-                for s, sd, st in itertools.product(scen, range(seeds), a.strategies.split(","))]
+        jobs = [dict(scenario=s, config=cf, seed=sd, urgent_ttc=a.urgent_ttc, lookahead=a.lookahead,
+                     record=int(sd == 0))
+                for s, sd, cf in itertools.product(scen, range(seeds), a.configs.split(","))]
         jobs.sort(key=lambda j: -len(SCENARIOS[j["scenario"]]()["starts"]))   # big runs first
         print(f"{len(jobs)} swarm runs on {a.workers} workers")
         t0, results = time.time(), []
         with Pool(a.workers) as pool:
             for i, r in enumerate(pool.imap_unordered(run, jobs)):
                 results.append(r)
-                print(f"  {i + 1}/{len(jobs)} {r['scenario']:20s} {r['strategy']:11s} seed {r['seed']}: "
+                print(f"  {i + 1}/{len(jobs)} {r['scenario']:20s} {r['config']:30s} seed {r['seed']}: "
                       f"success {r['success']} falls {r['falls']} contacts {r['rr_contacts']}  "
                       f"({(time.time() - t0) / 60:.1f} min)", flush=True)
         plot_paths(results, a.out)

@@ -28,7 +28,7 @@ The model is looked up at `./mujoco_menagerie`; override with `MENAGERIE_PATH=/p
 | `python scripts/pilot_phase.py` | Pilot: does disturbance response depend on gait phase? (`--quick` for a 1-min test) |
 | `python scripts/capability_map.py` | Build + validate the capability map from the pilot CSV; phase-aware timing analysis |
 | `python scripts/push_envelope.py` | Measure the push-capability envelope J_max(direction, phase, speed) by bisection (`--quick` ≈ 2 min) |
-| `python scripts/swarm_eval.py` | Swarm test: 4 scenarios × command strategies (`--quick` ≈ 3 min) |
+| `python scripts/swarm_eval.py` | Swarm test: 4 scenarios × configs `layer:strategy[:q]` (reactive/predictive, commander strategy, bottleneck queueing) |
 | `python scripts/commander_eval.py` | Closed-loop test of phase-aware command timing vs. immediate release / slew limiter (`--quick` ≈ 1 min) |
 | `pytest` | Unit + physics tests |
 
@@ -60,7 +60,8 @@ go1_bezier/      controller package
   commander.py     PhaseAwareCommander: swarm-layer -> robot, releases big changes at the best phase
   gasl.py          gait-aware slew limiter (phase/direction-shaped acceleration limit) + strategy names
   orca.py          ORCA (port of RVO2's linear programs), static disc obstacles
-  swarm.py         SwarmAgent (ORCA + keep-right + heading control), FormationPlan, elastic_scale
+  swarm.py         SwarmAgent (ORCA + keep-right + heading control, predictive lookahead), FormationPlan,
+                   elastic_scale, queue_responsibility (bottleneck priority)
   scenarios.py     swap4/swap8 (antipodal), formation9 through pillars, formation6 through a gate
 data/            capability_map_bezier.npz, push_envelope_bezier.npz (built from experiments)
 examples/        viewer demos, video recording

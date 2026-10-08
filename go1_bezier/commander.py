@@ -53,7 +53,7 @@ class PhaseAwareCommander:
                         "phase_soft": np.asarray(SOFT, float)}.get(strategy, np.asarray(LIMITS, float))
         self.pending = None                 # (target, release_time)
         self.pending_key = None
-        ctrl.acc_scale_fn = None
+        ctrl.acc_scale_fn = gasl if gasl is not None else None
         if strategy.startswith("gasl"):
             if gasl is None:
                 from .gasl import GaitAwareLimiter
@@ -68,7 +68,9 @@ class PhaseAwareCommander:
         self.log = []                       # (t_request, t_release, wait_s, key)
 
     # ------------------------------------------------------------------ API
-    def request(self, vx, vy, wz, urgent=False):
+    def request(self, vx, vy, wz, urgent=False, deadline=None):
+        """deadline (s): the change is needed no later than this (planned manoeuvre from a
+        predictive layer); timing strategies may wait up to min(max_wait, deadline)."""
         target = np.array([vx, vy, wz], float)
         ref = self.pending[0] if self.pending is not None else self.c.cmd_target
         if np.allclose(target, ref, atol=1e-3):
@@ -89,7 +91,7 @@ class PhaseAwareCommander:
         if key is None:                                      # small change
             self._release(target, 0.0)
             return
-        if self.strategy == "phase_safe":
+        if self.strategy == "phase_safe" and deadline is None:
             if not self.in_domain(target):                   # unknown territory -> be careful
                 self.n_fallback += 1
                 self.c.acc_max = np.asarray(LIMITS, float)
@@ -100,7 +102,8 @@ class PhaseAwareCommander:
         v0 = float(np.clip(self.c.cmd_target[0], 0.0, 0.4))
         direction, size = key
         best = None
-        for w in np.linspace(0.0, self.max_wait, int(64 * self.max_wait) + 1):
+        max_wait = self.max_wait if deadline is None else min(self.max_wait, deadline / self.c.gait.period)
+        for w in np.linspace(0.0, max_wait, max(2, int(64 * max_wait) + 1)):
             p = (self.c.gait.phi + w) % 1.0
             pr = self.cmap.predict(kind, v0, direction, size, p)
             cost = pr["tilt"] + self.fall_weight * (pr["fall"] if np.isfinite(pr["fall"]) else 0.0)

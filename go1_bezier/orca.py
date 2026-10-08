@@ -6,7 +6,8 @@ as non-moving agents that take no responsibility (their half-planes go first and
 treated as hard constraints in linearProgram3).
 
     v_new = orca_velocity(p, v, r, v_pref, v_max, neighbors, obstacles, tau, tau_obs, dt)
-      neighbors: list of (p_j, v_j, r_j)    obstacles: list of (p_o, r_o)
+      neighbors: list of (p_j, v_j, r_j) or (p_j, v_j, r_j, responsibility)  [default 0.5]
+      obstacles: list of (p_o, r_o)
 """
 import numpy as np
 
@@ -127,8 +128,9 @@ def orca_velocity(p, v, r, v_pref, v_max, neighbors=(), obstacles=(), tau=2.0, t
     lines = [_half_plane(p, v, r, np.asarray(po, float), np.zeros(2), ro, tau_obs, dt, 1.0)
              for po, ro in obstacles]
     n_obst = len(lines)
-    lines += [_half_plane(p, v, r, np.asarray(pj, float), np.asarray(vj, float), rj, tau, dt, 0.5)
-              for pj, vj, rj in neighbors]
+    lines += [_half_plane(p, v, r, np.asarray(nb[0], float), np.asarray(nb[1], float), nb[2], tau, dt,
+                          nb[3] if len(nb) > 3 else 0.5)
+              for nb in neighbors]
     fail, result = _lp2(lines, v_max, v_pref, False)
     if fail < len(lines):
         result = _lp3(lines, n_obst, fail, v_max, result)

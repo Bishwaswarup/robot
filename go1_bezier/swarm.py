@@ -35,9 +35,8 @@ class SwarmAgent:
     def velocity(self, p, v_pref, neighbours, obstacles, far_from_goal=True):
         """neighbours: list of (p_j, v_j, r_j); obstacles: list of (p_o, r_o)."""
         p = np.asarray(p, float)
-        nb = sorted(((np.linalg.norm(np.asarray(q) - p), q, vq, rq) for q, vq, rq in neighbours),
-                    key=lambda x: x[0])
-        nb = [(q, vq, rq) for dist, q, vq, rq in nb if dist < self.sense_radius][: self.max_nb]
+        nb = sorted(((np.linalg.norm(np.asarray(n[0]) - p), n) for n in neighbours), key=lambda x: x[0])
+        nb = [n for dist, n in nb if dist < self.sense_radius][: self.max_nb]
         ob = [(q, rq) for q, rq in obstacles if np.linalg.norm(np.asarray(q) - p) - rq < self.sense_radius]
         v_pref = np.asarray(v_pref, float)
         if far_from_goal and np.linalg.norm(v_pref) > 1e-3:      # keep right: breaks symmetric deadlocks
@@ -58,6 +57,31 @@ class SwarmAgent:
         wz = float(np.clip(self.k_heading * wrap(heading - yaw), -self.w_max, self.w_max))
         vb = rot(-yaw) @ v_world
         return float(vb[0]), float(np.clip(vb[1], -self.vy_max, self.vy_max)), wz
+
+
+    def predictive(self, p, v_cmd, v_pref_fn, neighbours, obstacles, lookahead, far_from_goal=True):
+        """ORCA solved for the situation `lookahead` seconds ahead: own position extrapolated
+        with the current command, neighbours with their measured velocities. Returns the
+        velocity the robot will need then -> can be requested with a deadline (planned)
+        instead of reactively. v_pref_fn(p_future) gives the preferred velocity there."""
+        p_f = np.asarray(p, float) + np.asarray(v_cmd, float) * lookahead
+        nb_f = [(np.asarray(n[0]) + np.asarray(n[1]) * lookahead,) + tuple(n[1:]) for n in neighbours]
+        self.v_prev = np.asarray(v_cmd, float)
+        return self.velocity(p_f, v_pref_fn(p_f), nb_f, obstacles, far_from_goal)
+
+
+def queue_responsibility(p, heading, neighbours, in_bottleneck, ahead=0.3, yield_resp=0.9, lead_resp=0.1):
+    """Priority at bottlenecks: the robot further back yields (takes most of the avoidance),
+    the one in front keeps going. Outside bottlenecks everything stays reciprocal (0.5)."""
+    if not in_bottleneck:
+        return neighbours
+    fwd = np.array([np.cos(heading), np.sin(heading)])
+    out = []
+    for n in neighbours:
+        s = (np.asarray(n[0]) - np.asarray(p)) @ fwd
+        resp = yield_resp if s > ahead else (lead_resp if s < -ahead else 0.5)
+        out.append((n[0], n[1], n[2], resp))
+    return out
 
 
 class FormationPlan:

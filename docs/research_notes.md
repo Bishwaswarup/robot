@@ -304,3 +304,40 @@ Options if the multi-seed swarm run confirms "weak":
   (C) regimes where phase matters more (higher speed, payload, slopes, other gaits/controllers);
   (B) write it up as a characterisation: when gait phase matters for multi-robot control and
       when it does not.
+
+### GASL full results (user's Mac, 2026-10-08)
+STEP test (480 paired trials per v0 and strategy). Distance to the uniform-limiter curve
+(limiter ×0.75/1/1.35/1.7), interpolated at equal response time t50:
+| strategy | v0 = 0 | v0 = 0.4 |
+|---|---|---|
+| gasl_equal (push-shaped) | −0.13° (−2%) | +0.09° (+2%) |
+| gaslc_equal (step-sensitivity-shaped) | −0.50° (−8%), ≙ 24 ms faster at equal tilt | −0.22° (−3.5%), 9 ms |
+| gaslc_x1.35 | −0.45° (−6.5%), 17 ms | −0.21° (−3%), 9 ms |
+| gaslc_x1.7 | −0.37° (−5%), 19 ms | −0.26° (−4%), 12 ms |
+Paired CIs exclude 0 for all gaslc rows. → small, consistent benefit of step-sensitivity
+shaping; push-envelope shaping ≈ none.
+STREAM (6×60 s): gaslc_equal p99 tilt 7.39° vs limiter 7.82°; limiter*1.35 and gaslc_x1.35
+each 1 fall; gaslc_x1.7 no gain over limiter*1.7.
+SWARM (5 seeds × 4 scenarios): falls — limiter 0, gaslc_equal 1, limiter*1.35 2,
+gaslc_x1.35 0, raw 37. At the 1.35× level gait-aware shaping looks more robust
+(pillars: 0 vs 2 falls, max tilt 25 vs 59°; gate: max 22 vs 43°, min dist 0.65 vs 0.52 m);
+at 1× it is mixed (swap8 p99 6.7 vs 7.3° but min dist 0.52 vs 0.57 m; pillars 1 fall vs 0).
+Gate: limiter and gaslc_equal each timed out once (bottleneck jam, not falls).
+Verdict: real but small (3–8% tilt at equal speed). Phase TIMING had the larger effect
+(−0.3…−0.5° AND 50–70 ms faster) but only applies to planned/non-urgent manoeuvres →
+next: predictive swarm layer (option D) + bottleneck ordering at gates.
+
+### Predictive swarm layer (option D) — implemented, full run pending
+- SwarmAgent.predictive(): ORCA solved for the situation one lookahead (0.36 s = 1 gait
+  period) ahead — own position extrapolated with the CURRENT command, neighbours with
+  measured velocities. The resulting velocity is requested with deadline = lookahead, so
+  timing strategies (phase+limiter, phase+gaslc_equal) may pick the gait phase without
+  being late. If the current command is unsafe (TTC < 0.8 s) → reactive + urgent.
+- Commander: request(..., deadline=s) caps the wait at min(max_wait, deadline);
+  "phase+gaslc_equal" = phase timing + step-sensitivity-shaped limiter.
+- Bottleneck queueing (":q"): near obstacles (elastic scale < 0.6) the robot further back
+  takes ORCA responsibility 0.9, the one in front 0.1 (instead of 0.5/0.5).
+- Configs compared: reactive:limiter (baseline), reactive:limiter:q, predictive:limiter:q,
+  predictive:phase+limiter:q, predictive:phase+gaslc_equal:q.
+- Single run (swap8, seed 0): predictive:phase+limiter:q vs reactive:limiter —
+  min dist 0.66 vs 0.57 m, p99 tilt 6.6 vs 7.2°, max 10.9 vs 13.6°, urgent 40% vs 55%.

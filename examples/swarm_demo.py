@@ -1,8 +1,8 @@
 """Watch a swarm scenario: ORCA + formation layer -> commander -> Go1 Bezier trot.
 
-macOS:  mjpython examples/swarm_demo.py --scenario formation6_gate --strategy phase_safe
+macOS:  mjpython examples/swarm_demo.py --scenario formation6_gate --config predictive:phase+limiter:q
         scenarios: swap4, swap8, formation9_pillars, formation6_gate
-        strategies: raw, limiter, phase, phase_safe
+        configs:   layer:strategy[:q]  e.g. reactive:limiter, predictive:phase+gaslc_equal:q
 """
 import os
 import sys
@@ -14,18 +14,22 @@ import numpy as np
 import mujoco
 import mujoco.viewer
 from go1_bezier import load_team, make_arena, Go1BezierController, CapabilityMap
-from go1_bezier.commander import PhaseAwareCommander
-from go1_bezier.swarm import SwarmAgent, goal_velocity, elastic_scale
+from go1_bezier.swarm import SwarmAgent, goal_velocity, elastic_scale, queue_responsibility
+from go1_bezier import PushEnvelope
+from go1_bezier.gasl import make_commander
 from go1_bezier.scenarios import SCENARIOS, R_ROBOT, add_obstacles
-from swarm_eval import MAP, ttc
+from swarm_eval import MAP, ENV, ttc, parse_config
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--scenario", default="swap8", choices=list(SCENARIOS))
-    ap.add_argument("--strategy", default="phase_safe")
+    ap.add_argument("--config", default="predictive:phase+limiter:q")
+    ap.add_argument("--lookahead", type=float, default=0.36)
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()
+    layer, strategy, queue = parse_config(a.config)
+    look = a.lookahead
     sc = SCENARIOS[a.scenario]()
     rng = np.random.default_rng(a.seed)
     m, d = load_team(sc["starts"], spec=add_obstacles(make_arena(), sc["obstacles"]))
@@ -34,7 +38,9 @@ def main():
     ctrls = [Go1BezierController(m, d, prefix=f"go1_{i}/") for i in range(N)]
     for c in ctrls:
         c.gait.phi = rng.uniform()
-    coms = [PhaseAwareCommander(c, cmap, a.strategy) for c in ctrls]
+    env = PushEnvelope.load(ENV) if os.path.exists(ENV) else None
+    cache = {}
+    coms = [make_commander(c, strategy, cmap, env, cache) for c in ctrls]
     agents = [SwarmAgent(radius=R_ROBOT) for _ in range(N)]
     trunk = [m.body(f"go1_{i}/trunk").id for i in range(N)]
     vel = np.zeros((N, 2))
@@ -55,20 +61,32 @@ def main():
                 pos = np.array([d.xpos[b][:2] for b in trunk])
                 if k % tick == 0:
                     for i in range(N):
-                        if sc["plan"] is not None:
-                            lam = elastic_scale(pos[i], sc["plan"].heading, sc["obstacles"])
-                            v_pref = sc["plan"].preferred_velocity(i, pos[i], t, lam)
-                            far = np.linalg.norm(sc["plan"].slot(i, t, lam)[0] - pos[i]) > 1.0
-                        else:
-                            v_pref = goal_velocity(pos[i], sc["goals"][i])
-                            far = np.linalg.norm(np.asarray(sc["goals"][i]) - pos[i]) > 1.0
-                        nbs = [(pos[j], vel[j], R_ROBOT) for j in range(N) if j != i]
-                        v_w = agents[i].velocity(pos[i], v_pref, nbs, sc["obstacles"], far)
                         yaw = ctrls[i].yaw()
+                        if sc["plan"] is not None:
+                            plan = sc["plan"]
+                            lam = elastic_scale(pos[i], plan.heading, sc["obstacles"])
+                            target, heading, in_bn = plan.slot(i, t, lam)[0], plan.heading, lam < 0.6
+                            pref_now = (lambda q, i=i, lam=lam: plan.preferred_velocity(i, q, t, lam))
+                            pref_ahead = (lambda q, i=i, lam=lam: plan.preferred_velocity(i, q, t + look, lam))
+                        else:
+                            target = np.asarray(sc["goals"][i])
+                            heading, in_bn = np.arctan2(*(target - pos[i])[::-1]), False
+                            pref_now = pref_ahead = (lambda q, g=target: goal_velocity(q, g))
+                        far = np.linalg.norm(target - pos[i]) > 1.0
+                        nbs = [(pos[j], vel[j], R_ROBOT) for j in range(N) if j != i]
+                        if queue:
+                            nbs = queue_responsibility(pos[i], heading, nbs, in_bn)
                         Rz = np.array([[np.cos(yaw), -np.sin(yaw)], [np.sin(yaw), np.cos(yaw)]])
-                        urgent = ttc(pos[i], Rz @ ctrls[i].cmd_target[:2],
-                                     nbs + [(q, np.zeros(2), r) for q, r in sc["obstacles"]], R_ROBOT) < 0.8
-                        coms[i].request(*agents[i].body_command(v_w, yaw), urgent=bool(urgent))
+                        v_cmd = Rz @ ctrls[i].cmd_target[:2]
+                        urgent = ttc(pos[i], v_cmd, [n[:3] for n in nbs] +
+                                     [(q, np.zeros(2), r) for q, r in sc["obstacles"]], R_ROBOT) < 0.8
+                        if layer == "predictive" and not urgent:
+                            v_w = agents[i].predictive(pos[i], v_cmd, pref_ahead, nbs, sc["obstacles"], look, far)
+                            deadline = look
+                        else:
+                            v_w = agents[i].velocity(pos[i], pref_now(pos[i]), nbs, sc["obstacles"], far)
+                            deadline = None
+                        coms[i].request(*agents[i].body_command(v_w, yaw), urgent=bool(urgent), deadline=deadline)
                 for cm_ in coms:
                     cm_.step()
                 mujoco.mj_step(m, d)

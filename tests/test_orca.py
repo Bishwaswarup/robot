@@ -46,3 +46,26 @@ def test_static_obstacle_respected():
     p, _, omin = _simulate([(-3, 0)], [(3, 0)], obstacles=[((0, 0), 0.5)])
     assert omin >= 0.35 - 0.02
     assert np.allclose(p, [(3, 0)], atol=0.1)
+
+
+def test_responsibility_changes_who_yields():
+    from go1_bezier.swarm import queue_responsibility
+    me, other = np.array([0.0, 0.0]), np.array([0.9, 0.0])
+    nb = [(other, np.zeros(2), 0.35)]
+    q = queue_responsibility(me, 0.0, nb, in_bottleneck=True)
+    assert q[0][3] == 0.9                              # I am behind -> I yield
+    q2 = queue_responsibility(other, 0.0, [(me, np.zeros(2), 0.35)], in_bottleneck=True)
+    assert q2[0][3] == 0.1                             # the other is in front -> keeps going
+    assert queue_responsibility(me, 0.0, nb, in_bottleneck=False) == nb
+
+
+def test_predictive_reacts_earlier_than_reactive():
+    from go1_bezier.swarm import SwarmAgent
+    p, v = np.array([0.0, 0.0]), np.array([0.5, 0.0])
+    nb = [(np.array([2.2, 0.0]), np.array([-0.5, 0.0]), 0.35)]   # head-on, 2.2 m away
+    a, b = SwarmAgent(radius=0.35, keep_right_deg=0), SwarmAgent(radius=0.35, keep_right_deg=0)
+    a.v_prev = v.copy()
+    pref = lambda q: np.array([0.5, 0.0])
+    v_react = a.velocity(p, pref(p), nb, [])
+    v_pred = b.predictive(p, v, pref, nb, [], lookahead=0.36)
+    assert abs(v_pred[1]) >= abs(v_react[1]) - 1e-9
