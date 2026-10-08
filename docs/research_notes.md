@@ -155,3 +155,21 @@ push-recovery tests and fall statistics (stress test, pilot experiment).
 - Per-leg check: sit on hind legs and wave FR/FL, sit on front legs and wave RL/RR;
   waving foot lifts > 0.2 m while the other three stay planted.
 - Scaling: 1 robot ≈ 7× real time, 16 ≈ 1×, 64 ≈ 0.25× (Linux container; Python-bound).
+
+### Push capability envelope J_max (scripts/push_envelope.py) — design
+Why: the pilot tested only 60/120/180/240 N and the fall transition lies between 120
+and 180 N, so any fitted J_max there would be interpolation. A parametric
+Fourier/logistic fit (support-diagonal axis 45/135°, folded mod 180°) was checked on the
+held-out repeat: fall Brier 0.042–0.072 vs 0.012 for the lookup table, and it predicted
+up to 9–19% falls at 120 N where none occurred; the true stance-diagonal axes are ±34°
+(FR+RL: −34°, FL+RR: +34°), and forward vs backward pushes differ (27% vs 60% falls at
+240 N), so folding mod 180° is not valid. → measure J_max directly.
+Design: 2 speeds × 16 directions × 16 phases × 3 repeats, bisection 60–320 N
+(6 steps, ~4 N), criteria fall and safe (no fall and tilt ≤ 20°), same state noise
+for all probes of one bisection; monotonicity spot check at 0.85·J / 1.15·J; agreement
+with pilot falls; maps in absolute direction and relative to the stance diagonal
+(both half-cycles pooled by mirror symmetry).
+Smoke test (4 dirs × 4 phases, v0 0.4, 1 repeat): J_fall 149–275 N, J_safe 145–194 N;
+monotonicity 100% / 95%; predicts 96.4% of pilot push outcomes. Full run pending.
+Note: thresholds (tilt 20°) still arbitrary; a walking-speed bump between two Go1s is
+~3 N·s (≈ 30 N for 0.1 s), far below J_max → J_max matters for hard impacts.

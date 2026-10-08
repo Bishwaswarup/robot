@@ -172,3 +172,49 @@ class CapabilityMap:
             if np.isfinite(cost) and (best is None or cost < best[3] - 1e-9):
                 best = (p, w, pr[metric], cost)
         return best[:3]
+
+
+class PushEnvelope:
+    """Measured push capability J_max(v0, direction, phase) from scripts/push_envelope.py.
+
+        env = PushEnvelope.load("data/push_envelope_bezier.npz")
+        env.j_max(v0=0.4, direction=90, phase=0.3)               # 'safe' criterion, N (0.1 s push)
+        env.j_max(0.4, 90, 0.3, criterion="fall")
+        env.impulse_max(0.4, 90, 0.3)                             # N*s
+
+    Interpolation: linear in v0 (clamped), periodic-linear in direction and phase.
+    """
+    PUSH_DURATION = 0.1
+
+    def __init__(self, grids, tilt_crit=None):
+        self.grids = grids           # criterion -> dict(G[v0, dir, phase], S, v0, dirs, phases)
+        self.tilt_crit = tilt_crit
+
+    @classmethod
+    def load(cls, path):
+        z = np.load(path)
+        grids = {}
+        for crit in ("fall", "safe"):
+            if f"{crit}/G" in z:
+                grids[crit] = {k: z[f"{crit}/{k}"] for k in ("G", "S", "v0", "dirs", "phases")}
+        return cls(grids, float(z["tilt_crit"]) if "tilt_crit" in z else None)
+
+    def j_max(self, v0, direction, phase, criterion="safe"):
+        g = self.grids[criterion]
+        num = den = 0.0
+        for a, wa in CapabilityMap._lin(g["v0"], v0):
+            for b, wb in CapabilityMap._per(len(g["dirs"]), (float(direction) - g["dirs"][0]) / 360.0):
+                for c, wc in CapabilityMap._per(len(g["phases"]), float(phase) - g["phases"][0]):
+                    v = g["G"][a, b, c]
+                    w = wa * wb * wc
+                    if w > 0 and np.isfinite(v):
+                        num += w * v
+                        den += w
+        return num / den if den > 0 else np.nan
+
+    def impulse_max(self, v0, direction, phase, criterion="safe"):
+        return self.j_max(v0, direction, phase, criterion) * self.PUSH_DURATION
+
+    def worst_case(self, v0, direction, criterion="safe", n=64):
+        """Phase-blind margin: the minimum over the gait cycle."""
+        return min(self.j_max(v0, direction, p, criterion) for p in np.arange(n) / n)

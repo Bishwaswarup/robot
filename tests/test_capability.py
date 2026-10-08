@@ -41,3 +41,22 @@ def test_save_load_roundtrip(tmp_path):
     cm.save(p)
     cm2 = CapabilityMap.load(p)
     assert cm.predict("cmd_raw", 0.2, 30, 0.5, 0.3) == cm2.predict("cmd_raw", 0.2, 30, 0.5, 0.3)
+
+
+def test_push_envelope_interpolation(tmp_path):
+    from go1_bezier.capability import PushEnvelope
+    dirs = np.arange(16) * 22.5
+    phases = np.arange(16) / 16
+    G = np.zeros((2, 16, 16))
+    for a in range(2):
+        for b, th in enumerate(dirs):
+            G[a, b] = 200 + 50 * np.cos(np.radians(th)) + 20 * np.cos(2 * np.pi * phases) - 10 * a
+    p = tmp_path / "env.npz"
+    np.savez(p, **{"safe/G": G, "safe/S": 0 * G, "safe/v0": np.array([0.0, 0.4]),
+                   "safe/dirs": dirs, "safe/phases": phases, "tilt_crit": np.array(20.0)})
+    env = PushEnvelope.load(p)
+    assert abs(env.j_max(0.0, 0, 0.0) - 270) < 1e-9                 # on grid
+    assert abs(env.j_max(0.2, 0, 0.0) - 265) < 1e-9                 # v0 interpolation
+    assert abs(env.j_max(0.0, 360, 1.0) - env.j_max(0.0, 0, 0.0)) < 1e-9   # periodic
+    assert env.worst_case(0.0, 180) < env.j_max(0.0, 180, 0.0)
+    assert abs(env.impulse_max(0.0, 0, 0.0) - 27.0) < 1e-9

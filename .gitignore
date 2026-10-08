@@ -22,3 +22,6 @@ MUJOCO_LOG.TXT
 ._*
 .vscode/
 .idea/
+
+# smoke-test outputs
+data/*_quick.npz
