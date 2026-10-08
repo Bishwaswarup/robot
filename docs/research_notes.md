@@ -56,6 +56,25 @@ Repeat with and without the command slew limiter.
 Decision: strong φ-dependence → φ is a headline variable; otherwise keep the
 locomotion state q only ("locomotion capability map").
 
+## Gait stability (scripts/floquet.py)
+Stroboscopic Poincare map (sample once per gait period, x/y/yaw removed), Jacobian by
+central differences, Floquet multipliers = eigenvalues. max|lambda| < 1 -> locally stable.
+
+| command | open loop | Raibert only | PI + Raibert (default) |
+|---|---|---|---|
+| stand-in-place | 0.78 | 0.24 | 0.47 |
+| fwd 0.3 | 0.74 | 0.26 | 0.42 |
+| fwd 0.6 | 0.73 | 0.35 | 0.51 |
+| back -0.3 | 0.87* | 0.35 | 0.59 |
+| lateral 0.25 | 0.78 | 0.41 | 0.49 |
+
+All locally stable. The open-loop gait is stable but slow to reject perturbations
+(15-30 strides for 99% decay) and has a speed bias; Raibert foot placement speeds
+recovery ~3x; the PI loop removes the bias but adds a slower integrator mode.
+(*) open-loop backward orbit not fully converged (drift 1e-2): treat as approximate.
+Local multipliers say nothing about large disturbances -> complement with basin /
+push-recovery tests and fall statistics (stress test, pilot experiment).
+
 ## Low-level controller status (go1_bezier)
 - Velocity tracking within ~0.02 of command (fwd 0.3/0.6, back −0.3, lateral 0.25, yaw 0.8).
 - Random abrupt commands, 4 min: 0 falls with slew limiter (max tilt 9–22°);
