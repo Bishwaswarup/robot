@@ -28,6 +28,7 @@ sys.path.insert(0, os.path.join(HERE, ".."))
 sys.path.insert(0, HERE)
 import argparse
 import csv
+import zlib
 import itertools
 import time
 import warnings
@@ -97,7 +98,7 @@ def build_jobs(quick, reps, criteria, tilt_crit, n_dir=16, n_phase=16):
         dirs, phases, v0s, reps = dirs[::4], phases[::4], [0.4], 1
     jobs = []
     for k, (v0, th, ph, rep, crit) in enumerate(itertools.product(v0s, dirs, phases, range(reps), criteria)):
-        seed = 1 + hash((v0, float(th), float(ph), rep)) % 1_000_000     # shared by both criteria
+        seed = 1 + zlib.crc32(f"{v0}|{float(th)}|{float(ph)}|{rep}".encode()) % 1_000_000   # shared by both criteria
         jobs.append(dict(v0=v0, dir=float(th), phi=float(ph), rep=rep, criterion=crit,
                          seed=int(seed), tilt_crit=tilt_crit))
     return jobs
@@ -211,6 +212,8 @@ def analyse(rows, out_dir, map_path, tilt_crit, pilot_csv=None, lines=None):
             P(f"\nAgreement with pilot falls (pilot trial falls iff F > J_fall of its cell): "
               f"{100 * agree / n:.1f}% of {n} pilot push trials")
 
+    support_axis_analysis(rows, P)
+
     # save for go1_bezier.capability.PushEnvelope
     out = {}
     for crit, g in grids.items():
@@ -223,6 +226,62 @@ def analyse(rows, out_dir, map_path, tilt_crit, pilot_csv=None, lines=None):
     with open(os.path.join(out_dir, "push_envelope_summary.txt"), "w") as f:
         f.write("\n".join(lines) + "\n")
     plot(rows, grids, out_dir, tilt_crit)
+
+
+N_PSI = 8
+
+
+def preferred_axis(thr, psi, J):
+    """Per stance-progress bin: axis (deg, mod 180) along which J is largest, and the
+    modulation amplitude (N), from the 2nd circular harmonic of J(theta_r)."""
+    ang, amp = np.full(N_PSI, np.nan), np.full(N_PSI, np.nan)
+    for b in range(N_PSI):
+        m = (psi >= b / N_PSI) & (psi < (b + 1) / N_PSI)
+        if m.sum() < 4:
+            continue
+        z = np.sum((J[m] - J[m].mean()) * np.exp(2j * np.radians(thr[m])))
+        ang[b] = np.degrees(np.angle(z)) / 2
+        amp[b] = 2 * abs(z) / m.sum()
+    return ang, amp
+
+
+def support_axis_analysis(rows, P):
+    """Compact physical model: J(theta_r, psi) = J0(psi) + A(psi) cos 2(theta_r - alpha(psi)).
+    alpha = the 'effective support axis'; compare with the stance diagonal (0 deg) and the
+    next diagonal (+68 deg). Held-out (repeat 2) R2 vs. adding more harmonics and vs. the
+    full 16x16 table."""
+    P("\nEFFECTIVE SUPPORT AXIS  (axis of largest J vs. progress through stance;")
+    P("   0 deg = current stance diagonal, +68 deg = the next diagonal (FL+RR seen from FR+RL))")
+    for crit in sorted({r["criterion"] for r in rows}):
+        for v0 in sorted({r["v0"] for r in rows}):
+            R = [r for r in rows if r["criterion"] == crit and r["v0"] == v0]
+            thr, psi = relative_coords([r["dir"] for r in R], [r["phi"] for r in R])
+            J = np.array([r["j_max"] for r in R])
+            rep = np.array([r["rep"] for r in R])
+            ang, amp = preferred_axis(thr, psi, J)
+            P(f"  {crit:4s} v0={v0:.1f}  alpha(psi): " +
+              " ".join(f"{a:+4.0f}" for a in ang) + "  deg   amplitude: " + " ".join(f"{x:3.0f}" for x in amp) + " N")
+            if (rep == 2).any() and (rep < 2).any():
+                t = np.radians(thr)
+                for ks, name in (((2,), "axis model (k=2)"), ((1, 2, 3, 4), "harmonics k=1..4")):
+                    pred = np.full(len(J), np.nan)
+                    for b in range(N_PSI):
+                        m = (psi >= b / N_PSI) & (psi < (b + 1) / N_PSI)
+                        tr, te = m & (rep < 2), m & (rep == 2)
+                        F = lambda idx: np.column_stack([np.ones(idx.sum())] +
+                                                        [f(k * t[idx]) for k in ks for f in (np.cos, np.sin)])
+                        beta = np.linalg.lstsq(F(tr), J[tr], rcond=None)[0]
+                        pred[te] = F(te) @ beta
+                    te = rep == 2
+                    r2 = 1 - np.nansum((J[te] - pred[te]) ** 2) / np.sum((J[te] - J[te].mean()) ** 2)
+                    P(f"            held-out R2 {name:18s} {r2:.3f}")
+                cell = {}
+                for r in R:
+                    if r["rep"] < 2:
+                        cell.setdefault((r["dir"], r["phi"]), []).append(r["j_max"])
+                y = np.array([r["j_max"] for r in R if r["rep"] == 2])
+                pt = np.array([np.mean(cell[(r["dir"], r["phi"])]) for r in R if r["rep"] == 2])
+                P(f"            held-out R2 {'full 16x16 table':18s} {1 - ((y - pt) ** 2).sum() / ((y - y.mean()) ** 2).sum():.3f}")
 
 
 def plot(rows, grids, out_dir, tilt_crit):
@@ -250,8 +309,8 @@ def plot(rows, grids, out_dir, tilt_crit):
             cs = ax.contour(ph, th, Z, levels=[100, 150, 200, 250], colors="k", linewidths=0.7)
             ax.clabel(cs, fmt="%d N", fontsize=7)
             ax.axvline(0.5, color="k", lw=0.6, ls=":")
-            ax.set_xlabel("gait phase at push (0-0.5: FR+RL stance, 0.5-1: FL+RR stance)")
-            ax.set_ylabel("push direction, body frame (deg; 0 = forward, 90 = left)")
+            ax.set_xlabel("gait phase at push (0-0.5 FR+RL, 0.5-1 FL+RR stance)")
+            ax.set_ylabel("push direction, body frame (deg; 0 fwd, 90 left)")
             ax.set_yticks(np.arange(0, 360, 45))
             ax.set_title(f"v0 = {v0} m/s", fontsize=10)
         fig.colorbar(im, ax=axes, fraction=0.03, label=lab[crit])
@@ -263,7 +322,7 @@ def plot(rows, grids, out_dir, tilt_crit):
 
         # (b) relative to stance diagonal, both half-cycles pooled by mirror symmetry
         R = [r for r in rows if r["criterion"] == crit]
-        fig, axes = plt.subplots(1, len(v0s), figsize=(6 * len(v0s), 4.6), squeeze=False)
+        fig, axes = plt.subplots(1, len(v0s), figsize=(6.5 * len(v0s), 5.0), squeeze=False)
         nb_t, nb_p = 16, 8
         for j, v0 in enumerate(v0s):
             Rv = [r for r in R if r["v0"] == v0]
@@ -281,14 +340,24 @@ def plot(rows, grids, out_dir, tilt_crit):
             im = ax.imshow(Z, origin="lower", aspect="auto", cmap="Blues", vmin=vmin, vmax=vmax,
                            extent=(0, 1, -180, 180))
             ax.axhline(0, color="k", lw=0.6, ls=":")
-            ax.axhline(180, color="k", lw=0.6, ls=":")
-            ax.axhline(-180, color="k", lw=0.6, ls=":")
+            ax.axhline(68, color="k", lw=0.6, ls="--")
+            ax.axhline(-112, color="k", lw=0.6, ls="--")
+            ang, _ = preferred_axis(thr, psi, J)
+            xc = (np.arange(N_PSI) + 0.5) / N_PSI
+            for off in (0, -180, 180):
+                y = ang + off
+                ok = (y >= -180) & (y <= 180)
+                ax.plot(xc[ok], y[ok], "o-", color="#f2a900", lw=1.8, ms=4)
+            ax.set_ylim(-180, 180)
             ax.set_yticks([-180, -135, -90, -45, 0, 45, 90, 135, 180])
-            ax.set_xlabel("progress through stance of the supporting diagonal (0 = touchdown, 1 = lift-off)")
-            ax.set_ylabel("push angle rel. to forward end of stance diagonal (deg)")
-            ax.set_title(f"v0 = {v0} m/s  (both diagonals pooled by mirror symmetry)", fontsize=10)
+            ax.set_xlabel("stance progress of supporting diagonal (0 touchdown, 1 lift-off)")
+            ax.set_ylabel("push angle vs. stance diagonal (deg)")
+            ax.set_title(f"v0 = {v0} m/s", fontsize=10)
         fig.colorbar(im, ax=axes, fraction=0.03, label=lab[crit])
-        fig.suptitle(f"Push capability envelope ({crit}) relative to the supporting diagonal", fontsize=11)
+        fig.suptitle(f"Push capability envelope ({crit}) relative to the supporting diagonal "
+                     f"(both diagonals pooled by mirror symmetry)\n"
+                     "dotted: stance diagonal (0°)   dashed: next diagonal (+68° / -112°)   "
+                     "orange: axis of largest J (effective support axis)", fontsize=10, y=1.06)
         fn = os.path.join(out_dir, f"envelope_{crit}_relative.png")
         fig.savefig(fn, dpi=130, bbox_inches="tight")
         plt.close(fig)
@@ -314,6 +383,10 @@ def main():
     if a.analyse_only:
         with open(csv_path) as f:
             rows = list(csv.DictReader(f))
+        old = os.path.join(a.out, "push_envelope_summary.txt")
+        if os.path.exists(old):                    # keep the monotonicity result of the run
+            with open(old) as f:
+                lines += [l.rstrip("\n") for l in f if l.startswith("MONOTONICITY")][:1]
     else:
         jobs = build_jobs(a.quick, a.reps, a.criteria.split(","), a.tilt_crit)
         print(f"{len(jobs)} bisections (~{len(jobs) * (STEPS + 2)} simulations) on {a.workers} workers")

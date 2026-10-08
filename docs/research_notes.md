@@ -204,3 +204,28 @@ equal (+0.0°, CI ±1°), t50 −0.09 s, t90 −0.13 s (CI excludes 0); phase+li
 limiter: tilt −1.1° but t50 +0.09 s. → combined with the limiter, phase timing gives
 lower tilt; without it, the same tilt as the limiter with a faster response. Full run pending. (Offline prediction was tilt −0.4…−0.7° at
 faster settle; live, the tilt benefit is smaller.)
+
+### Commander result (full run, 2026-10-08): results/commander_summary.txt
+STEP test (960 paired trials per strategy; events inside the map's domain):
+| v0 | strategy | tilt | t50 | t90 | settle |
+|---|---|---|---|---|---|
+| 0.0 | raw / limiter / **phase** / phase+lim | 8.28 / 6.09 / **5.60** / 4.94° | 0.21 / 0.36 / **0.29** / 0.43 s | 0.30 / 0.47 / **0.36** / 0.55 s | 1.14 / 1.14 / **1.05** / 1.13 s |
+| 0.4 | raw / limiter / **phase** / phase+lim | 8.10 / 6.04 / **5.76** / 4.99° | 0.20 / 0.33 / **0.27** / 0.41 s | 0.28 / 0.45 / **0.35** / 0.52 s | 1.09 / 1.11 / **1.01** / 1.16 s |
+Paired phase − limiter: tilt −0.49° / −0.29° (CI excl. 0), t50 −0.070 / −0.053 s,
+t90 −0.115 / −0.097 s, settle −0.091 / −0.097 s → phase timing DOMINATES the uniform
+limiter (less tilt AND faster) for in-domain events. phase+limiter: −1.1° tilt, +0.07–0.08 s t50.
+
+STREAM test (6 × 60 s random commands at 10 Hz): phase 0.33 falls/min (2 falls), p99
+tilt 13.7° ≈ raw (14.8°) vs limiter 7.8°, 0 falls. Diagnosis: the stream's big events
+are combined planar+yaw jumps (up to ~1.1 m/s and 1.2 rad/s) from turning/sideways,
+unsettled walking — outside the map (straight walking at 0/0.4 m/s, single-axis change
+≤ 0.8). Picking the "best" phase from a model outside its domain can pick a bad one.
+Fix: strategy phase_safe = phase timing in-domain, uniform limiter otherwise (domain
+check: settled, straight base, single change ≤ 0.85): stream 0 falls, mean tilt 2.11°
+(limiter 2.08°), p99 9.1° (7.8°), max 28.6° (12.8°), tracking = limiter. In this stream
+~97% of big events were out-of-domain, so phase_safe ≈ limiter there; identical to phase
+in the step test. phase_soft (phase + 2× softer limiter): p99 13.2°, no gain.
+→ To generalise, extend the map to a capability MODEL over arbitrary base velocity
+(vx, vy, wz) and combined changes (random-event dataset + learned regressor), and
+evaluate with the real swarm layer (ORCA commands are smoother than random jumps).
+(Seeds now use crc32, so runs are reproducible across processes.)

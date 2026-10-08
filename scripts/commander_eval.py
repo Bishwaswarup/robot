@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.join(HERE, ".."))
 sys.path.insert(0, HERE)
 import argparse
 import csv
+import zlib
 import itertools
 import time
 from multiprocessing import Pool
@@ -50,7 +51,7 @@ def _init(menagerie_env):
 
 # ------------------------------------------------------------------------------ step test
 def step_trial(t):
-    lim = t["strategy"] in ("limiter", "phase+limiter")
+    lim = t["strategy"] in ("limiter", "phase+limiter", "phase_soft")
     B = PP._baseline(t["v0"], lim)
     m, d, c = B["m"], B["d"], B["c"]
     mujoco.mj_setState(m, d, B["phys"], mujoco.mjtState.mjSTATE_PHYSICS)
@@ -148,7 +149,7 @@ def stream_trial(t):
             com.pending = None
         k += 1
     waits = [w for (_, _, w, key) in com.log if key is not None]
-    return dict(t, falls=falls, mean_tilt=round(float(np.mean(tilts)), 3),
+    return dict(t, falls=falls, n_fallback=getattr(com, "n_fallback", 0), mean_tilt=round(float(np.mean(tilts)), 3),
                 p99_tilt=round(float(np.percentile(tilts, 99)), 3), max_tilt=round(float(np.max(tilts)), 2),
                 mean_err=round(float(np.mean(errs)), 4), n_big=len(waits),
                 mean_wait=round(float(np.mean(waits)), 4) if waits else 0.0)
@@ -165,6 +166,8 @@ def boot_ci(x, n=2000, seed=0):
 
 
 def analyse(rows, srows, out):
+    present = {r["strategy"] for r in rows} | {r["strategy"] for r in srows}
+    strategies = [s for s in STRATEGIES if s in present]
     lines = []
     P = lambda s="": (print(s), lines.append(s))
     f = lambda r, k: float(r[k]) if r[k] not in ("", "nan", None) else np.nan
@@ -173,10 +176,11 @@ def analyse(rows, srows, out):
     P("=" * 86)
     for v0 in sorted({float(r["v0"]) for r in rows}):
         R = [r for r in rows if float(r["v0"]) == v0]
-        P(f"\nv0 = {v0} m/s   ({len(R) // len(STRATEGIES)} paired trials per strategy)")
+        strat = [s for s in strategies if any(r["strategy"] == s for r in R)]
+        P(f"\nv0 = {v0} m/s   ({len(R) // len(strat)} paired trials per strategy)")
         P(f"  {'strategy':15s} {'falls':>6s} {'tilt mean':>9s} {'p90':>6s} {'t50':>7s} {'t90':>7s} "
           f"{'settle':>7s} {'wait':>7s}")
-        for s in STRATEGIES:
+        for s in strat:
             Rs = [r for r in R if r["strategy"] == s]
             g = lambda k: np.array([f(r, k) for r in Rs])
             P(f"  {s:15s} {100 * np.mean(g('fell')):5.1f}% {np.nanmean(g('peak_tilt')):8.2f}° "
@@ -184,8 +188,11 @@ def analyse(rows, srows, out):
               f"{np.nanmean(g('settle')):6.2f}s {np.nanmean(g('wait_s')):6.3f}s")
         # paired differences: phase vs limiter, phase+limiter vs limiter
         key = lambda r: (r["dir"], r["size"], r["timing"])
-        by = {s: {key(r): r for r in R if r["strategy"] == s} for s in STRATEGIES}
-        for a, b in (("phase", "limiter"), ("phase+limiter", "limiter"), ("phase", "raw")):
+        by = {s: {key(r): r for r in R if r["strategy"] == s} for s in strat}
+        for a, b in (("phase", "limiter"), ("phase_safe", "limiter"), ("phase_soft", "limiter"),
+                     ("phase+limiter", "limiter"), ("phase", "raw")):
+            if a not in by or b not in by:
+                continue
             ks = [k for k in by[a] if k in by[b]]
             P(f"  paired {a} - {b}:")
             for metric, unit in (("peak_tilt", "deg"), ("t50", "s"), ("t90", "s"), ("settle", "s")):
@@ -199,17 +206,21 @@ def analyse(rows, srows, out):
         P("STREAM TEST  (60 s random commands re-requested at 10 Hz; error vs REQUESTED velocity)")
         P("=" * 86)
         P(f"  {'strategy':15s} {'falls/min':>9s} {'mean tilt':>9s} {'p99 tilt':>9s} {'max tilt':>9s} "
-          f"{'track err':>10s} {'mean wait':>9s}")
-        for s in STRATEGIES:
+          f"{'track err':>10s} {'mean wait':>9s} {'fallbacks':>9s}")
+        for s in strategies:
             S = [r for r in srows if r["strategy"] == s]
+            if not S:
+                continue
             g = lambda k: np.array([float(r[k]) for r in S])
             mins = np.sum(g("seconds")) / 60
             P(f"  {s:15s} {np.sum(g('falls')) / mins:9.2f} {np.mean(g('mean_tilt')):8.2f}° "
               f"{np.mean(g('p99_tilt')):8.2f}° {np.max(g('max_tilt')):8.1f}° {np.mean(g('mean_err')):8.3f} m/s "
-              f"{np.mean(g('mean_wait')):8.3f}s")
+              f"{np.mean(g('mean_wait')):8.3f}s "
+              f"{np.mean([float(r.get('n_fallback', 0) or 0) for r in S]):8.1f}")
     with open(os.path.join(out, "commander_summary.txt"), "w") as fh:
         fh.write("\n".join(lines) + "\n")
-    plot(rows, out)
+    if rows:
+        plot(rows, out)
 
 
 def plot(rows, out):
@@ -221,13 +232,15 @@ def plot(rows, out):
         return
     f = lambda r, k: float(r[k]) if r[k] not in ("", "nan", None) else np.nan
     v0s = sorted({float(r["v0"]) for r in rows})
-    style = {"raw": ("o", "#8a8f98"), "limiter": ("^", "#8a8f98"),
-             "phase": ("D", "#1f5fa8"), "phase+limiter": ("v", "#1f5fa8")}
+    style = {"raw": ("o", "#8a8f98"), "limiter": ("^", "#8a8f98"), "phase": ("D", "#1f5fa8"),
+             "phase+limiter": ("v", "#1f5fa8"), "phase_safe": ("s", "#0b3d7a"), "phase_soft": ("P", "#0b3d7a")}
     fig, axes = plt.subplots(1, len(v0s), figsize=(5.8 * len(v0s), 4.4), squeeze=False)
     for j, v0 in enumerate(v0s):
         ax = axes[0, j]
         for s in STRATEGIES:
             Rs = [r for r in rows if float(r["v0"]) == v0 and r["strategy"] == s]
+            if not Rs:
+                continue
             x = np.array([f(r, "t50") for r in Rs]); y = np.array([f(r, "peak_tilt") for r in Rs])
             xm, ym = np.nanmean(x), np.nanmean(y)
             xl, xh = boot_ci(x); yl, yh = boot_ci(y)
@@ -276,7 +289,10 @@ def main():
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 1))
     ap.add_argument("--out", default=os.path.join(ROOT, "results"))
     ap.add_argument("--analyse-only", action="store_true")
+    ap.add_argument("--strategies", default="raw,limiter,phase,phase+limiter,phase_safe")
+    ap.add_argument("--stream-only", action="store_true", help="skip the step test")
     a = ap.parse_args()
+    strategies = a.strategies.split(",")
     if not os.path.exists(MAP):
         sys.exit(f"{MAP} missing - run scripts/capability_map.py first")
     os.makedirs(a.out, exist_ok=True)
@@ -293,13 +309,16 @@ def main():
             dirs, v0s, sizes, timings, seeds, secs = ["45", "90", "270", "yaw+"], [0.4], [0.6], 4, 1, 20.0
         jobs = []
         for v0, dr, sz, tm in itertools.product(v0s, dirs, sizes, range(timings)):
-            seed = 1 + hash((v0, dr, sz, tm)) % 1_000_000
-            for s in STRATEGIES:
+            seed = 1 + zlib.crc32(f"{v0}|{dr}|{sz}|{tm}".encode()) % 1_000_000   # reproducible
+            for s in strategies:
                 jobs.append(dict(v0=v0, dir=dr, size=sz, timing=tm, seed=int(seed), strategy=s))
-        print(f"step test: {len(jobs)} trials on {a.workers} workers")
-        rows = run_pool(step_trial, jobs, a.workers, "step")
-        write_csv(rows, p_step)
-        sjobs = [dict(strategy=s, seed=1000 + i, seconds=secs) for i in range(seeds) for s in STRATEGIES]
+        if a.stream_only:
+            rows = list(csv.DictReader(open(p_step))) if os.path.exists(p_step) else []
+        else:
+            print(f"step test: {len(jobs)} trials on {a.workers} workers")
+            rows = run_pool(step_trial, jobs, a.workers, "step")
+            write_csv(rows, p_step)
+        sjobs = [dict(strategy=s, seed=1000 + i, seconds=secs) for i in range(seeds) for s in strategies]
         print(f"stream test: {len(sjobs)} runs of {secs:.0f} s")
         srows = run_pool(stream_trial, sjobs, a.workers, "stream")
         write_csv(srows, p_stream)
