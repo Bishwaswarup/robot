@@ -65,6 +65,7 @@ class Go1BezierController:
         self.cmd = np.zeros(3)          # what the gait is tracking (rate-limited)
         self.cmd_target = np.zeros(3)   # what was requested
         self.acc_max = None if acc_max is None else np.asarray(acc_max, float)
+        self.acc_scale_fn = None        # optional gait-aware limiter: f(ctrl, err) -> (s_planar, s_yaw)
         self.stand = True
         self.feet_target = self.gait.nominal.copy()
         self.height_target, self.height_rate = height, 0.1
@@ -130,7 +131,12 @@ class Go1BezierController:
             z += np.clip(self.height_target - z, -self.height_rate * dt, self.height_rate * dt)
             self.gait.nominal[:, 2] = -z
         if self.acc_max is not None:
-            self.cmd += np.clip(self.cmd_target - self.cmd, -self.acc_max * dt, self.acc_max * dt)
+            err = self.cmd_target - self.cmd
+            lim = self.acc_max * dt
+            if self.acc_scale_fn is not None and np.any(np.abs(err) > 1e-9):
+                sp, sw = self.acc_scale_fn(self, err)
+                lim = lim * np.array([sp, sp, sw])
+            self.cmd += np.clip(err, -lim, lim)
         u = self.cmd.copy()
         if not self.stand and (self.k_i > 0 or self.k_p > 0):
             err = self.cmd - self.body_velocity()

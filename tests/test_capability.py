@@ -60,3 +60,19 @@ def test_push_envelope_interpolation(tmp_path):
     assert abs(env.j_max(0.0, 360, 1.0) - env.j_max(0.0, 0, 0.0)) < 1e-9   # periodic
     assert env.worst_case(0.0, 180) < env.j_max(0.0, 180, 0.0)
     assert abs(env.impulse_max(0.0, 0, 0.0) - 27.0) < 1e-9
+
+
+def test_gait_aware_limiter_modes():
+    import os
+    from go1_bezier.capability import PushEnvelope
+    from go1_bezier.gasl import GaitAwareLimiter
+    root = os.path.join(os.path.dirname(__file__), "..", "data")
+    env = PushEnvelope.load(os.path.join(root, "push_envelope_bezier.npz"))
+    cm = CapabilityMap.load(os.path.join(root, "capability_map_bezier.npz"))
+    u = GaitAwareLimiter(env, mode="uniform", uniform=1.35, n_dir=8, n_phase=16)
+    assert np.allclose(u.S, 1.35)
+    for src in ("push", "cmd"):
+        e = GaitAwareLimiter(env, cmap=cm, source=src, mode="equal", n_dir=8, n_phase=16)
+        assert np.allclose(e.S.mean(axis=2), 1.0)               # same mean limit as uniform
+        f = GaitAwareLimiter(env, cmap=cm, source=src, mode="fast", n_dir=8, n_phase=16)
+        assert f.S.min() >= 1.0 - 1e-9 and f.S.max() <= 2.0 + 1e-9

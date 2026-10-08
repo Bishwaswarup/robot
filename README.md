@@ -18,6 +18,7 @@ The model is looked up at `./mujoco_menagerie`; override with `MENAGERIE_PATH=/p
 | Command | What it does |
 |---|---|
 | `mjpython examples/walk_demo.py` | Viewer: scripted walking (fwd, arc, sidestep, turn, backward). `--n 9` for a 3×3 team |
+| `mjpython examples/swarm_demo.py --scenario formation6_gate` | Viewer: swarm scenario (ORCA + formation + commander) |
 | `mjpython examples/trick_demo.py` | Viewer: height range, lie down/stand up, sit + wave each paw, crouch/tall walking |
 | `python examples/record_video.py` | Render the walk to MP4 without a window |
 | `python scripts/test_walk.py` | Command vs. measured velocity table |
@@ -27,6 +28,7 @@ The model is looked up at `./mujoco_menagerie`; override with `MENAGERIE_PATH=/p
 | `python scripts/pilot_phase.py` | Pilot: does disturbance response depend on gait phase? (`--quick` for a 1-min test) |
 | `python scripts/capability_map.py` | Build + validate the capability map from the pilot CSV; phase-aware timing analysis |
 | `python scripts/push_envelope.py` | Measure the push-capability envelope J_max(direction, phase, speed) by bisection (`--quick` ≈ 2 min) |
+| `python scripts/swarm_eval.py` | Swarm test: 4 scenarios × command strategies (`--quick` ≈ 3 min) |
 | `python scripts/commander_eval.py` | Closed-loop test of phase-aware command timing vs. immediate release / slew limiter (`--quick` ≈ 1 min) |
 | `pytest` | Unit + physics tests |
 
@@ -56,6 +58,10 @@ go1_bezier/      controller package
   sim_utils.py     load one robot or a team (shared meshes), foot friction
   capability.py    CapabilityMap (tilt/fall/recovery/slip vs. phase) and PushEnvelope (J_max)
   commander.py     PhaseAwareCommander: swarm-layer -> robot, releases big changes at the best phase
+  gasl.py          gait-aware slew limiter (phase/direction-shaped acceleration limit) + strategy names
+  orca.py          ORCA (port of RVO2's linear programs), static disc obstacles
+  swarm.py         SwarmAgent (ORCA + keep-right + heading control), FormationPlan, elastic_scale
+  scenarios.py     swap4/swap8 (antipodal), formation9 through pillars, formation6 through a gate
 data/            capability_map_bezier.npz, push_envelope_bezier.npz (built from experiments)
 examples/        viewer demos, video recording
 scripts/         headless evaluation scripts

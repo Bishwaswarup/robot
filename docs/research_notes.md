@@ -229,3 +229,78 @@ in the step test. phase_soft (phase + 2× softer limiter): p99 13.2°, no gain.
 (vx, vy, wz) and combined changes (random-event dataset + learned regressor), and
 evaluate with the real swarm layer (ORCA commands are smoother than random jumps).
 (Seeds now use crc32, so runs are reproducible across processes.)
+
+### Swarm layer v0 (go1_bezier/orca.py, swarm.py, scenarios.py; scripts/swarm_eval.py)
+Per robot, 10 Hz, local info only (neighbours ≤ 4 m, measured velocities): goal or
+formation slot (virtual reference with shared clock, elastic lateral offsets from local
+obstacle sensing) → ORCA (RVO2 LP port, τ = 2 s, r = 0.38 m, keep-right 15° bias to break
+symmetric deadlocks — without it 8-agent swaps deadlock) → heading control → commander
+(urgent if TTC with current command < 0.8 s) → Bezier controller.
+
+First run (1 seed per scenario; Linux):
+| scenario | raw | limiter | phase | phase_safe |
+|---|---|---|---|---|
+| swap4 | ok, p99 tilt 6.3° | ok, 5.7° | ok, 4.6° | = limiter |
+| swap8 | ok, 12.8°, min d 0.61 | ok, 7.2°, 0.57 | ok, 9.8°, 0.69 | = limiter |
+| formation9 pillars | 5 falls | ok, 8.2° | 6 falls, fail | ok, 8.6° |
+| formation6 gate | 4 falls, fail | ok, 7.0°, 47 s | 1 fall, fail | ok, 8.2°, 47 s |
+
+Key findings:
+1. Only 0–2% of the swarm's big command changes are inside the capability map's domain
+   (settled, straight, single change). Swarm changes are frequent (20–100 per robot-minute),
+   mostly turning (median |Δwz| ≈ 0.48 rad/s with |Δv| ≈ 0.15–0.17 m/s) from unsettled walking,
+   and ~50% are urgent (TTC < 0.8 s) → waiting for a phase is rarely possible or sensible.
+2. Without a slew limiter (raw, phase) the robots fall in the formation scenarios; the
+   uniform limiter and phase_safe: 0 falls, 100% success. phase_safe ≈ limiter.
+3. Min centre distance drops below 2r (0.57–0.62 vs 0.76 m) because of tracking lag;
+   faster response (phase in swap8: 0.69 m) improves separation at the cost of tilt.
+→ Phase-aware TIMING (waiting) does not transfer to dense swarm operation.
+→ Proposed pivot back to the original idea: a gait-aware FEASIBLE SET / slew limit —
+   allowed velocity change per tick as a function of (phase, direction, state), from the
+   capability data, applied every tick without waiting (also usable as the ORCA LP's
+   velocity bound). Expected benefit: faster reaction (larger min distance, fewer urgent
+   events) at the same tilt/falls as the uniform limiter. Needs a capability model over
+   arbitrary state + combined changes (random-event data).
+
+### Swarm full run (3 seeds, user's Mac) — confirms the single-seed picture
+raw/phase: falls in swap8 (3/2), pillars (12/12), gate (6/2), success 33% in formation
+scenarios; limiter & phase_safe: 0 falls, 100% success. In-domain fraction 0–2%.
+Viewer observation (Bishwa): robots "get confused" at the gate entrance and need a few
+tries before passing → ORCA jostling at a bottleneck (urgent events peak there). Future:
+bottleneck ordering / queueing (deadlock-recovery item of the original plan).
+
+### Gait-aware slew limiter (go1_bezier/gasl.py) — first results
+Idea: no waiting; the per-step acceleration limit is scaled by the robot's tolerance at
+the current phase and acceleration direction. Two tolerance sources:
+  push   : push envelope J_safe(θ, φ)  (d'Alembert analogy: acceleration ≈ push)
+  cmd    : 1 / (tilt per m/s of an instantaneous step at φ)  from the capability map —
+           under linear superposition, ramp tilt ≈ ∫ a(t)·K(θ, φ(t)) dt, so put the
+           acceleration where K is small.
+Modes: "equal" (same mean limit as uniform, redistributed), "x k" (mean k×uniform).
+Fair comparison = uniform limiter family limiter*k (k = 0.75, 1, 1.35, 1.7).
+Step test (v0 0.4, size 0.6, 60 paired trials, Linux):
+| strategy | tilt | t50 |
+|---|---|---|
+| limiter*0.75 / 1 / 1.35 / 1.7 | 5.54 / 6.43 / 7.00 / 7.42° | 0.365 / 0.332 / 0.305 / 0.288 s |
+| gasl_equal (push) | 6.54° | 0.336 s |
+| gaslc_equal (cmd) | 6.23° | 0.328 s |
+| gaslc_x1.35 | 6.93° | 0.302 s |
+- push-shaped: no gain (+0.1°, n.s.) → the d'Alembert analogy does not hold here.
+- cmd-shaped: −0.20° at equal speed (CI [−0.35, −0.03]), gains concentrated in backward
+  diagonals (135°/225°: −0.8°); vs limiter*1.35: −0.07° (n.s.). Phase lead 0.125/0.25: no help.
+- Interpretation: a limiter ramp spans ~1–1.5 strides, so shaping WITHIN the ramp averages
+  most of the phase effect out; the uniform acceleration magnitude dominates.
+Swarm (1 seed): gaslc_x1.35 vs limiter*1.35: swap8 min dist 0.70 vs 0.64 m, pillars p99
+tilt 9.6 vs 13.3°, max 20.5 vs 43.9°; gaslc_equal vs limiter mixed. Needs the 5-seed run.
+
+Status of the "gait-aware" claim so far:
+  strong   for isolated events: phase gates falls (pilot), J_max 1.33–1.44× (envelope),
+           timing dominates uniform limiting in the step test;
+  weak     for continuous reactive swarm commands: waiting rarely possible (urgent ~50%,
+           in-domain ~1%), ramp shaping ≈ 3% tilt reduction.
+Options if the multi-seed swarm run confirms "weak":
+  (D) predictive swarm layer (plan manoeuvres ≥ 1 stride ahead → turn urgent reactions into
+      scheduled ones, where phase timing works);
+  (C) regimes where phase matters more (higher speed, payload, slopes, other gaits/controllers);
+  (B) write it up as a characterisation: when gait phase matters for multi-robot control and
+      when it does not.

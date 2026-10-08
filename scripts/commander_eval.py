@@ -35,11 +35,13 @@ from multiprocessing import Pool
 import numpy as np
 import mujoco
 import pilot_phase as PP                                   # baseline snapshots + restore
-from go1_bezier import CapabilityMap, Go1BezierController, load_single
+from go1_bezier import CapabilityMap, PushEnvelope, Go1BezierController, load_single
+from go1_bezier.gasl import parse_strategy, make_commander as _make_commander
 from go1_bezier.commander import PhaseAwareCommander, STRATEGIES
 
 ROOT = os.path.join(HERE, "..")
 MAP = os.path.join(ROOT, "data", "capability_map_bezier.npz")
+ENV = os.path.join(ROOT, "data", "push_envelope_bezier.npz")
 WINDOW = 2.5
 _G = {}
 
@@ -47,11 +49,22 @@ _G = {}
 def _init(menagerie_env):
     PP._init_worker(menagerie_env)
     _G["cmap"] = CapabilityMap.load(MAP)
+    _G["env"] = PushEnvelope.load(ENV) if os.path.exists(ENV) else None
+    _G["gasl"] = {}
+
+
+def parse_gasl(strategy):
+    kw = parse_strategy(strategy)
+    return (None, None) if kw is None else ("gasl", kw)
+
+
+def make_commander(c, strategy):
+    return _make_commander(c, strategy, _G["cmap"], _G["env"], _G["gasl"])
 
 
 # ------------------------------------------------------------------------------ step test
 def step_trial(t):
-    lim = t["strategy"] in ("limiter", "phase+limiter", "phase_soft")
+    lim = t["strategy"] in ("limiter", "phase+limiter", "phase_soft") or parse_gasl(t["strategy"])[0] is not None
     B = PP._baseline(t["v0"], lim)
     m, d, c = B["m"], B["d"], B["c"]
     mujoco.mj_setState(m, d, B["phys"], mujoco.mjtState.mjSTATE_PHYSICS)
@@ -66,7 +79,7 @@ def step_trial(t):
         c.step(); mujoco.mj_step(m, d)
     phi_req = c.gait.phi
 
-    com = PhaseAwareCommander(c, _G["cmap"], t["strategy"])
+    com = make_commander(c, t["strategy"])
     start = c.cmd_target.copy()
     if t["dir"].startswith("yaw"):
         target = start + np.array([0, 0, (2.0 if t["dir"] == "yaw+" else -2.0) * t["size"]])
@@ -126,7 +139,7 @@ def stream_trial(t):
     rng = np.random.default_rng(t["seed"])
     m, d = load_single()
     c = Go1BezierController(m, d)
-    com = PhaseAwareCommander(c, _G["cmap"], t["strategy"])
+    com = make_commander(c, t["strategy"])
     for _ in range(250):
         com.step(); mujoco.mj_step(m, d)
     dt, T = m.opt.timestep, t["seconds"]
@@ -166,8 +179,8 @@ def boot_ci(x, n=2000, seed=0):
 
 
 def analyse(rows, srows, out):
-    present = {r["strategy"] for r in rows} | {r["strategy"] for r in srows}
-    strategies = [s for s in STRATEGIES if s in present]
+    present = list(dict.fromkeys([r["strategy"] for r in rows] + [r["strategy"] for r in srows]))
+    strategies = present
     lines = []
     P = lambda s="": (print(s), lines.append(s))
     f = lambda r, k: float(r[k]) if r[k] not in ("", "nan", None) else np.nan
@@ -189,8 +202,8 @@ def analyse(rows, srows, out):
         # paired differences: phase vs limiter, phase+limiter vs limiter
         key = lambda r: (r["dir"], r["size"], r["timing"])
         by = {s: {key(r): r for r in R if r["strategy"] == s} for s in strat}
-        for a, b in (("phase", "limiter"), ("phase_safe", "limiter"), ("phase_soft", "limiter"),
-                     ("phase+limiter", "limiter"), ("phase", "raw")):
+        pairs = [(s, "limiter") for s in strat if s not in ("limiter", "raw")] + [("phase", "raw")]
+        for a, b in pairs:
             if a not in by or b not in by:
                 continue
             ks = [k for k in by[a] if k in by[b]]
@@ -233,27 +246,38 @@ def plot(rows, out):
     f = lambda r, k: float(r[k]) if r[k] not in ("", "nan", None) else np.nan
     v0s = sorted({float(r["v0"]) for r in rows})
     style = {"raw": ("o", "#8a8f98"), "limiter": ("^", "#8a8f98"), "phase": ("D", "#1f5fa8"),
-             "phase+limiter": ("v", "#1f5fa8"), "phase_safe": ("s", "#0b3d7a"), "phase_soft": ("P", "#0b3d7a")}
+             "phase+limiter": ("v", "#1f5fa8"), "phase_safe": ("s", "#0b3d7a"), "phase_soft": ("P", "#0b3d7a"),
+             "gasl_fast": ("*", "#c2410c"), "gasl_equal": ("X", "#c2410c")}
     fig, axes = plt.subplots(1, len(v0s), figsize=(5.8 * len(v0s), 4.4), squeeze=False)
     for j, v0 in enumerate(v0s):
         ax = axes[0, j]
-        for s in STRATEGIES:
+        for s in dict.fromkeys(r["strategy"] for r in rows):
             Rs = [r for r in rows if float(r["v0"]) == v0 and r["strategy"] == s]
             if not Rs:
                 continue
             x = np.array([f(r, "t50") for r in Rs]); y = np.array([f(r, "peak_tilt") for r in Rs])
             xm, ym = np.nanmean(x), np.nanmean(y)
             xl, xh = boot_ci(x); yl, yh = boot_ci(y)
-            mk, col = style[s]
+            mk, col = style.get(s.split("@")[0], ("o", "#c2410c" if "gasl" in s else "#8a8f98"))
             ax.errorbar(xm, ym, xerr=[[xm - xl], [xh - xm]], yerr=[[ym - yl], [yh - ym]],
                         fmt=mk, ms=9, color=col, capsize=3)
             ax.annotate(s, (xm, ym), textcoords="offset points", xytext=(8, 5), fontsize=9)
+        fam = []
+        for s in dict.fromkeys(r["strategy"] for r in rows):
+            if s == "limiter" or s.startswith("limiter*"):
+                Rs = [r for r in rows if float(r["v0"]) == v0 and r["strategy"] == s]
+                fam.append((np.nanmean([f(r, "t50") for r in Rs]), np.nanmean([f(r, "peak_tilt") for r in Rs])))
+        if len(fam) > 1:
+            fam.sort()
+            ax.plot(*zip(*fam), "-", color="#8a8f98", lw=1, zorder=0, label="uniform limiter family")
+            ax.legend(fontsize=8, frameon=False)
         ax.set_xlabel("t50: time from request to 50% of the velocity change (s)")
         ax.set_ylabel("mean peak tilt (deg)")
         ax.set_title(f"v0 = {v0} m/s", fontsize=10)
         ax.grid(alpha=0.25)
         ax.spines[["top", "right"]].set_visible(False)
-    fig.suptitle("Closed-loop: phase-aware timing vs. immediate release (lower-left is better; 95% CI)",
+    fig.suptitle("Command handling strategies: response time vs. tilt (lower-left is better; 95% CI).\n"
+                 "Gait-aware shaping helps only if its points lie BELOW the uniform-limiter curve.",
                  fontsize=10)
     fig.tight_layout()
     fn = os.path.join(out, "commander_tradeoff.png")
@@ -289,8 +313,12 @@ def main():
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 1))
     ap.add_argument("--out", default=os.path.join(ROOT, "results"))
     ap.add_argument("--analyse-only", action="store_true")
-    ap.add_argument("--strategies", default="raw,limiter,phase,phase+limiter,phase_safe")
+    ap.add_argument("--strategies", default="limiter*0.75,limiter,limiter*1.35,limiter*1.7,"
+                                            "gasl_equal,gaslc_equal,gaslc_x1.35,gaslc_x1.7")
     ap.add_argument("--stream-only", action="store_true", help="skip the step test")
+    ap.add_argument("--v0s", default="0.0,0.4")
+    ap.add_argument("--sizes", default="0.4,0.6,0.8")
+    ap.add_argument("--dirs", default="0,45,90,135,180,225,270,315,yaw+,yaw-")
     a = ap.parse_args()
     strategies = a.strategies.split(",")
     if not os.path.exists(MAP):
@@ -303,8 +331,9 @@ def main():
         rows = list(csv.DictReader(open(p_step)))
         srows = list(csv.DictReader(open(p_stream))) if os.path.exists(p_stream) else []
     else:
-        dirs = ["0", "45", "90", "135", "180", "225", "270", "315", "yaw+", "yaw-"]
-        v0s, sizes, timings, seeds, secs = [0.0, 0.4], [0.4, 0.6, 0.8], a.timings, a.stream_seeds, 60.0
+        dirs = a.dirs.split(",")
+        v0s, sizes = [float(x) for x in a.v0s.split(",")], [float(x) for x in a.sizes.split(",")]
+        timings, seeds, secs = a.timings, a.stream_seeds, 60.0
         if a.quick:
             dirs, v0s, sizes, timings, seeds, secs = ["45", "90", "270", "yaw+"], [0.4], [0.6], 4, 1, 20.0
         jobs = []
