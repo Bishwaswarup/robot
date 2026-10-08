@@ -25,6 +25,7 @@ The model is looked up at `./mujoco_menagerie`; override with `MENAGERIE_PATH=/p
 | `python scripts/height_range.py` | Min/max stand height and walkable heights |
 | `python scripts/floquet.py` | Gait stability: Poincaré map, Floquet multipliers |
 | `python scripts/pilot_phase.py` | Pilot: does disturbance response depend on gait phase? (`--quick` for a 1-min test) |
+| `python scripts/capability_map.py` | Build + validate the capability map from the pilot CSV; phase-aware timing analysis |
 | `pytest` | Unit + physics tests |
 
 On macOS the viewer needs `mjpython` (installed with `mujoco`); on Linux/Windows use `python`.
@@ -51,6 +52,8 @@ go1_bezier/      controller package
   poses.py         static body-pose control (feet planted, trunk moved, legs lifted/waved)
   tricks.py        the sit/wave/height routine
   sim_utils.py     load one robot or a team (shared meshes), foot friction
+  capability.py    capability map: predicted tilt / fall / recovery / slip vs. phase
+data/            capability_map_bezier.npz (built from the pilot run)
 examples/        viewer demos, video recording
 scripts/         headless evaluation scripts
 tests/           pytest

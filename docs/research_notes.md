@@ -63,9 +63,69 @@ Implemented: `scripts/pilot_phase.py` (10,752 trials: 2 base speeds × 16 phases
 slip beyond undisturbed walking). Decide on effect size (phase swing, phase-gated
 falls), not on p-values: in a near-deterministic simulator any phase effect is
 "significant".
-Smoke test (--quick, 208 trials, Linux): 240 N lateral/fore-aft pushes were
-phase-gated (0% falls at one phase, 100% at another); command-step tilt swings
-~0.5–1.3° (17–27% of mean). Full run pending.
+### Pilot result (full run, 10,752 trials, 2026-10-08), results/pilot_summary.txt
+Median phase swing (worst-phase mean − best-phase mean, % of mean):
+
+| group | falls | phase-gated | tilt swing | recovery swing | excess-slip swing |
+|---|---|---|---|---|---|
+| cmd step, v0 0.0, no limiter | 0% | 0/40 | 3.3° (85%) | 0.45 s (51%) | 58 mm (26%) |
+| cmd step, v0 0.0, limiter | 0% | 0/40 | 2.3° (39%) | 0.32 s (22%) | 22 mm (14%) |
+| cmd step, v0 0.4, no limiter | 0% | 0/40 | 3.6° (57%) | 0.42 s (57%) | 61 mm (56%) |
+| cmd step, v0 0.4, limiter | 0% | 0/40 | 2.1° (37%) | 0.34 s (30%) | 30 mm (34%) |
+| push, v0 0.0 | 24.5% | 12/32 | 10.8° (78%) | 0.48 s (40%) | 122 mm (63%) |
+| push, v0 0.4 | 23.4% | 15/32 | 9.2° (70%) | 0.55 s (42%) | 180 mm (99%) |
+
+Reading:
+- Phase effect is large by the pre-set rule (swings > 30%, 27/64 push conditions
+  phase-gated: 0% falls at one phase, 100% at another). Run-to-run noise is small
+  (eta2 0.75–0.98).
+- Mirror check passes: best phase for a push at direction d matches direction −d
+  shifted by half a cycle (e.g. 45°/240 N best phi 0.125 ↔ 315°/240 N best 0.625;
+  135° 0.688 ↔ 225° 0.188), as expected from the trot's diagonal-pair symmetry →
+  physical effect, not noise. (The "worst phi = 0.000" entries are argmax ties.)
+- Falls are phase-gated only for big pushes (180–240 N × 0.1 s ≈ 1.5–2 m/s Δv);
+  realistic robot-robot bumps are far smaller. Command steps never caused falls.
+- The slew limiter roughly halves the command-step phase effect (to ~2° / 0.3 s),
+  i.e. uniform limiting already buys most of the safety, at the cost of latency.
+
+Decision / revised claim: keep gait phase in the swarm layer, framed as
+**phase-aware command timing**: instead of uniformly rate-limiting, release or shape
+an aggressive velocity change according to phase → same tilt/fall safety with less
+reaction latency (test as a Pareto front: reaction time vs. peak tilt/falls,
+raw vs. uniform limiter vs. phase-aware).
+
+Robustness checks still needed before claiming:
+1. second low-level controller (MuJoCo Playground Go1 policy) shows the same effect;
+2. other gait periods (0.30 / 0.42 s) and finer phase grid (32);
+3. ~~capability map~~ done, see below.
+
+### Capability map (scripts/capability_map.py, go1_bezier/capability.py)
+Grid (v0 × size × direction × 16 phases) of mean tilt / fall prob. / recovery / slip,
+pooled with the trot mirror symmetry, linear interpolation (periodic in phase and
+direction). Saved as data/capability_map_bezier.npz.
+- Mirror symmetry: r = 0.993 (mean |diff| 0.55°) vs. r = 0.853 (3.7°) for a plain
+  half-cycle shift → strong physical structure.
+- Held-out repeat: phase-aware vs phase-blind prediction of peak tilt
+  R² 0.98 vs 0.87 (limiter), 0.94 vs 0.70 (no limiter), 0.97 vs 0.71 (push);
+  push falls Brier 0.012 vs 0.073 (6× better). 8-phase map predicts the 8
+  in-between phases with R² 0.88–0.98 → 16 phases is sufficient.
+- Phase-aware timing (cross-validated; large command changes 0.6–0.8 m/s):
+
+| strategy | tilt v0=0 | settle v0=0 | tilt v0=0.4 | settle v0=0.4 |
+|---|---|---|---|---|
+| no limiter, release now | 8.8° | 1.21 s | 8.9° | 1.13 s |
+| uniform slew limiter | 6.5° | 1.21 s | 6.3° | 1.14 s |
+| no limiter, wait ≤ ½ cycle (≈ 85 ms mean) | 5.8° | 1.13 s | 5.9° | 1.02 s |
+| limiter + wait ≤ ½ cycle | 5.3° | 1.20 s | 5.3° | 1.17 s |
+
+  Waiting on average ~85 ms for a good phase beats the uniform limiter on BOTH tilt
+  (−0.4 to −0.7°) and settle time (−0.08 to −0.12 s). This is the core evidence for
+  phase-aware command timing.
+- Caveats: "settle" uses our recovery criterion (tilt < 5°, stride-averaged velocity
+  error < 0.1 m/s); for collision avoidance the relevant number may be the time to
+  e.g. 50% of the velocity change → measure it in the next experiment. Pushes cannot
+  be timed; their map is for risk estimation (e.g. inflating safety margins at bad phases).
+  All results are for the Bezier controller only.
 
 ## Gait stability (scripts/floquet.py)
 Stroboscopic Poincare map (sample once per gait period, x/y/yaw removed), Jacobian by
