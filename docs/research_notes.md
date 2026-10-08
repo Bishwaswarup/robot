@@ -56,6 +56,17 @@ Repeat with and without the command slew limiter.
 Decision: strong φ-dependence → φ is a headline variable; otherwise keep the
 locomotion state q only ("locomotion capability map").
 
+Implemented: `scripts/pilot_phase.py` (10,752 trials: 2 base speeds × 16 phases ×
+[10 command-step directions × 4 sizes × limiter on/off + 8 push directions × 4 sizes]
+× 3 repeats with small state noise). Metrics: fell, peak tilt, recovery time
+(tilt < 5°, stride-averaged velocity error < 0.1 m/s), excess foot slip (loaded-contact
+slip beyond undisturbed walking). Decide on effect size (phase swing, phase-gated
+falls), not on p-values: in a near-deterministic simulator any phase effect is
+"significant".
+Smoke test (--quick, 208 trials, Linux): 240 N lateral/fore-aft pushes were
+phase-gated (0% falls at one phase, 100% at another); command-step tilt swings
+~0.5–1.3° (17–27% of mean). Full run pending.
+
 ## Gait stability (scripts/floquet.py)
 Stroboscopic Poincare map (sample once per gait period, x/y/yaw removed), Jacobian by
 central differences, Floquet multipliers = eigenvalues. max|lambda| < 1 -> locally stable.

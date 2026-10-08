@@ -14,15 +14,6 @@ pip install -r requirements.txt
 ```
 The model is looked up at `./mujoco_menagerie`; override with `MENAGERIE_PATH=/path/to/mujoco_menagerie`.
 
-## Publish to GitHub
-With the GitHub CLI installed and authenticated (`gh auth login`), create a
-private repository and push the current branch:
-```bash
-bash scripts/publish_github.sh
-```
-Pass a different repository name as the first argument if needed. If `origin`
-is already configured, the script pushes to it instead of creating a repository.
-
 ## Run
 | Command | What it does |
 |---|---|
@@ -32,6 +23,8 @@ is already configured, the script pushes to it instead of creating a repository.
 | `python scripts/test_walk.py` | Command vs. measured velocity table |
 | `python scripts/stress_test.py` | Random abrupt commands, counts falls |
 | `python scripts/height_range.py` | Min/max stand height and walkable heights |
+| `python scripts/floquet.py` | Gait stability: Poincaré map, Floquet multipliers |
+| `python scripts/pilot_phase.py` | Pilot: does disturbance response depend on gait phase? (`--quick` for a 1-min test) |
 | `pytest` | Unit + physics tests |
 
 On macOS the viewer needs `mjpython` (installed with `mujoco`); on Linux/Windows use `python`.
