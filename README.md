@@ -19,6 +19,7 @@ The model is looked up at `./mujoco_menagerie`; override with `MENAGERIE_PATH=/p
 |---|---|
 | `mjpython examples/walk_demo.py` | Viewer: scripted walking (fwd, arc, sidestep, turn, backward). `--n 9` for a 3×3 team |
 | `mjpython examples/swarm_demo.py --scenario formation6_gate` | Viewer: swarm scenario (ORCA + formation + commander) |
+| `mjpython examples/course_demo.py --team 6` | Viewer: obstacle course (pole slalom, gate, chicane, two timed moving obstacles, pillars) for 1 robot or a team |
 | `mjpython examples/trick_demo.py` | Viewer: height range, lie down/stand up, sit + wave each paw, crouch/tall walking |
 | `python examples/record_video.py` | Render the walk to MP4 without a window |
 | `python scripts/test_walk.py` | Command vs. measured velocity table |
@@ -29,6 +30,9 @@ The model is looked up at `./mujoco_menagerie`; override with `MENAGERIE_PATH=/p
 | `python scripts/capability_map.py` | Build + validate the capability map from the pilot CSV; phase-aware timing analysis |
 | `python scripts/push_envelope.py` | Measure the push-capability envelope J_max(direction, phase, speed) by bisection (`--quick` ≈ 2 min) |
 | `python scripts/swarm_eval.py` | Swarm test: 4 scenarios × configs `layer:strategy[:q]` (reactive/predictive, commander strategy, bottleneck queueing) |
+| `python scripts/course_eval.py --seeds 20 --speed 0.45` | Obstacle course: team 1 and 6, reactive vs. predictive, section times (`--quick`) |
+| `python scripts/paper_runs.py` | All paper swarm experiments: main ablation (20 seeds), lookahead sweep, scaling to 16/32 robots + paired stats (`--quick` ≈ 15 min); `--suites obstacles` re-runs the obstacle scenarios with static-obstacle safety |
+| `python scripts/swarm_stats.py <csv>` | Paired statistics (bootstrap CI, permutation p) vs. baseline |
 | `python scripts/commander_eval.py` | Closed-loop test of phase-aware command timing vs. immediate release / slew limiter (`--quick` ≈ 1 min) |
 | `pytest` | Unit + physics tests |
 
@@ -62,7 +66,9 @@ go1_bezier/      controller package
   orca.py          ORCA (port of RVO2's linear programs), static disc obstacles
   swarm.py         SwarmAgent (ORCA + keep-right + heading control, predictive lookahead), FormationPlan,
                    elastic_scale, queue_responsibility (bottleneck priority)
-  scenarios.py     swap4/swap8 (antipodal), formation9 through pillars, formation6 through a gate
+  scenarios.py     swap4/8/16/32 (antipodal), formation9/16 through pillars, formation6 through a gate
+  course.py        obstacle course + PathPlan (curvilinear formation along waypoints, single-file
+                   collapse where narrow, path-following preference) + moving obstacles
 data/            capability_map_bezier.npz, push_envelope_bezier.npz (built from experiments)
 examples/        viewer demos, video recording
 scripts/         headless evaluation scripts

@@ -72,16 +72,25 @@ def ttc(p, v, others, R):
 
 
 def parse_config(cfg):
+    """'layer[@lookahead]:strategy[:q]' -> (layer, strategy, queue). Use parse_lookahead for @."""
     parts = cfg.split(":")
     if len(parts) == 1:
         return "reactive", parts[0], 0
-    return parts[0], parts[1], int(len(parts) > 2 and parts[2] == "q")
+    return parts[0].split("@")[0], parts[1], int(len(parts) > 2 and parts[2] == "q")
+
+
+def parse_lookahead(cfg, default):
+    head = cfg.split(":")[0]
+    return float(head.split("@")[1]) if "@" in head else default
+
+
+STATIC_SAFETY = dict(static_margin=0.1, tau_obs=2.0, static_ttc=1.5)   # same as course_eval
 
 
 def run(job):
     layer, strategy, queue = parse_config(job["config"])
     job = dict(job, strategy=strategy)
-    look = job.get("lookahead", 0.36)
+    look = parse_lookahead(job["config"], job.get("lookahead", 0.36))
     sc = SCENARIOS[job["scenario"]]()
     rng = np.random.default_rng(job["seed"])
     starts = [(x + rng.normal(0, 0.05), y + rng.normal(0, 0.05), yaw) for x, y, yaw in sc["starts"]]
@@ -95,7 +104,14 @@ def run(job):
     env = PushEnvelope.load(ENV) if os.path.exists(ENV) else None
     cache = {}
     coms = [make_commander(c, job["strategy"], cmap, env, cache) for c in ctrls]
-    agents = [SwarmAgent(radius=R_ROBOT) for _ in range(N)]
+    # static-obstacle safety (opt-in; off = the original paper runs): ORCA sees obstacles inflated
+    # by static_margin, looks tau_obs ahead of them, and a command heading into one within
+    # static_ttc counts as urgent (the slew-limited ramp needs a longer warning than robots do)
+    margin = job.get("static_margin", 0.0)
+    obst = [(q, r + margin) for q, r in sc["obstacles"]]
+    static_ttc = job.get("static_ttc") or job["urgent_ttc"]
+    agents = [SwarmAgent(radius=R_ROBOT, **({"tau_obs": job["tau_obs"]} if job.get("tau_obs") else {}))
+              for _ in range(N)]
     trunk = [m.body(f"go1_{i}/trunk").id for i in range(N)]
     root_of = np.array([m.body_rootid[m.geom_bodyid[g]] for g in range(m.ngeom)])
     robot_of_root = {trunk[i]: i for i in range(N)}
@@ -115,6 +131,8 @@ def run(job):
     dmin, rr_pairs, ro_pairs = np.inf, set(), set()
     rr_events = ro_events = 0
     paths = [[] for _ in range(N)] if job.get("record") else None
+    form_err, lag = [], []                       # formation scenarios (10 Hz)
+    arrive = np.full(N, np.nan)                  # goal scenarios: first arrival per robot
     t0 = d.time
     for k in range(n_steps):
         t = d.time - t0
@@ -144,16 +162,32 @@ def run(job):
                 applied = ctrls[i].cmd_target
                 Rz = np.array([[np.cos(yaws[i]), -np.sin(yaws[i])], [np.sin(yaws[i]), np.cos(yaws[i])]])
                 v_cmd = Rz @ applied[:2]
-                urgent = ttc(pos[i], v_cmd, [n[:3] for n in nbs] + [(q, np.zeros(2), r) for q, r in sc["obstacles"]],
-                             R_ROBOT) < job["urgent_ttc"]
+                urgent = (ttc(pos[i], v_cmd, [n[:3] for n in nbs], R_ROBOT) < job["urgent_ttc"] or
+                          ttc(pos[i], v_cmd, [(q, np.zeros(2), r) for q, r in obst], R_ROBOT) < static_ttc)
                 if layer == "predictive" and not urgent:
-                    v_w = agents[i].predictive(pos[i], v_cmd, pref_ahead, nbs, sc["obstacles"], look, far)
+                    v_w = agents[i].predictive(pos[i], v_cmd, pref_ahead, nbs, obst, look, far)
                     deadline = look
                 else:
-                    v_w = agents[i].velocity(pos[i], pref_now(pos[i]), nbs, sc["obstacles"], far)
+                    v_w = agents[i].velocity(pos[i], pref_now(pos[i]), nbs, obst, far)
                     deadline = None
                 cmd = agents[i].body_command(v_w, yaws[i])
                 coms[i].request(*cmd, urgent=bool(urgent), deadline=deadline)
+            if sc["plan"] is not None:
+                plan = sc["plan"]
+                errs = []
+                for i in range(N):
+                    if not fallen[i]:
+                        lam = elastic_scale(pos[i], plan.heading, sc["obstacles"]) if job.get("elastic", 1) else 1.0
+                        errs.append(np.linalg.norm(plan.slot(i, t, lam)[0] - pos[i]))
+                if errs:
+                    form_err.append(float(np.mean(errs)))
+                ref, _ = plan.reference(t)
+                cen = np.mean([pos[i] - plan.slot(i, 0.0)[0] + plan.start for i in range(N) if not fallen[i]] or [ref], 0)
+                lag.append(float((ref - cen) @ plan.dir))
+            else:
+                for i in range(N):
+                    if np.isnan(arrive[i]) and np.linalg.norm(np.asarray(sc["goals"][i]) - pos[i]) < 0.4:
+                        arrive[i] = t
             if paths is not None and k % (5 * tick) == 0:
                 for i in range(N):
                     paths[i].append(pos[i].tolist())
@@ -210,7 +244,13 @@ def run(job):
                big_per_robot_min=round(big / N / (sim_t / 60), 2),
                in_domain_frac=round(sum(cm_.n_in_domain for cm_ in coms) / max(big, 1), 3),
                urgent_frac=round(sum(cm_.n_urgent for cm_ in coms) / max(big, 1), 3),
-               mean_wait=round(float(np.mean([w for cm_ in coms for (_, _, w, kk) in cm_.log if kk is not None] or [0])), 4))
+               mean_wait=round(float(np.mean([w for cm_ in coms for (_, _, w, kk) in cm_.log if kk is not None] or [0])), 4),
+               form_err=round(float(np.mean(form_err)), 4) if form_err else np.nan,
+               form_err_p95=round(float(np.percentile(form_err, 95)), 4) if form_err else np.nan,
+               lag_mean=round(float(np.mean(lag)), 4) if lag else np.nan,
+               lag_max=round(float(np.max(lag)), 4) if lag else np.nan,
+               arrive_mean=round(float(np.nanmean(arrive)), 3) if np.isfinite(arrive).any() else np.nan,
+               urgent_per_robot_min=round(sum(cm_.n_urgent for cm_ in coms) / N / (sim_t / 60), 2))
     if paths is not None:
         res["paths"] = paths
     return res
@@ -225,21 +265,26 @@ def analyse(rows, out):
     P("=" * 110)
     for sc in [s for s in SCENARIOS if any(r["scenario"] == s for r in rows)]:
         P(f"\n{sc}")
-        P(f"  {'config':30s} {'success':>7s} {'time':>7s} {'falls':>5s} {'robot-robot':>11s} {'robot-obst':>10s} "
+        P(f"  {'config':38s} {'success':>7s} {'time':>7s} {'falls':>5s} {'robot-robot':>11s} {'robot-obst':>10s} "
           f"{'min dist':>8s} {'tilt':>6s} {'p99':>6s} {'max':>6s} | {'big/rob/min':>11s} {'in-domain':>9s} "
-          f"{'urgent':>7s} {'wait':>6s}")
+          f"{'urgent':>7s} {'wait':>6s} | {'form err':>8s} {'lag':>6s} {'arrive':>6s}")
         for s in dict.fromkeys(r["config"] for r in rows):
             R = [r for r in rows if r["scenario"] == sc and r["config"] == s]
             if not R:
                 continue
             g = lambda k: np.array([f(r, k) for r in R])
-            P(f"  {s:30s} {100 * np.mean(g('success')):6.0f}% {np.nanmean(g('time')):6.1f}s {np.sum(g('falls')):5.0f} "
+            P(f"  {s:38s} {100 * np.mean(g('success')):6.0f}% {np.nanmean(g('time')):6.1f}s {np.sum(g('falls')):5.0f} "
               f"{np.mean(g('rr_contacts')):11.1f} {np.mean(g('ro_contacts')):10.1f} {np.min(g('min_dist')):7.2f}m "
               f"{np.mean(g('mean_tilt')):5.2f}° {np.mean(g('p99_tilt')):5.1f}° {np.max(g('max_tilt')):5.1f}° | "
               f"{np.mean(g('big_per_robot_min')):11.1f} {100 * np.mean(g('in_domain_frac')):8.0f}% "
-              f"{100 * np.mean(g('urgent_frac')):6.0f}% {np.mean(g('mean_wait')):5.3f}s")
+              f"{100 * np.mean(g('urgent_frac')):6.0f}% {np.mean(g('mean_wait')):5.3f}s | "
+              f"{np.nanmean(g('form_err')) if 'form_err' in R[0] else np.nan:7.3f}m "
+              f"{np.nanmean(g('lag_mean')) if 'lag_mean' in R[0] else np.nan:5.2f}m "
+              f"{np.nanmean(g('arrive_mean')) if 'arrive_mean' in R[0] else np.nan:5.1f}s")
     P("\n  big = command change >= 0.15 m/s (or 0.3 rad/s); in-domain = like the events the capability map")
     P("  was measured on (settled straight walking, single change <= 0.8); urgent = TTC below threshold.")
+    P("  form err = mean distance robot-to-slot (formation scenarios); lag = how far the formation trails")
+    P("  its reference; arrive = mean per-robot arrival time (swap scenarios).")
     with open(os.path.join(out, "swarm_summary.txt"), "w") as fh:
         fh.write("\n".join(lines) + "\n")
 
@@ -288,6 +333,8 @@ def main():
                                          "predictive:phase+limiter:q,predictive:phase+gaslc_equal:q")
     ap.add_argument("--lookahead", type=float, default=0.36, help="s (one gait period)")
     ap.add_argument("--urgent-ttc", type=float, default=0.8)
+    ap.add_argument("--static-safety", action="store_true",
+                    help="obstacle margin 0.1 m, tau_obs 2 s, urgent if TTC to an obstacle < 1.5 s")
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 1))
     ap.add_argument("--out", default=os.path.join(ROOT, "results"))
     ap.add_argument("--analyse-only", action="store_true")
@@ -299,8 +346,9 @@ def main():
     else:
         scen = ["swap4", "swap8"] if a.quick else a.scenarios.split(",")
         seeds = 1 if a.quick else a.seeds
+        extra = STATIC_SAFETY if a.static_safety else {}
         jobs = [dict(scenario=s, config=cf, seed=sd, urgent_ttc=a.urgent_ttc, lookahead=a.lookahead,
-                     record=int(sd == 0))
+                     record=int(sd == 0), **extra)
                 for s, sd, cf in itertools.product(scen, range(seeds), a.configs.split(","))]
         jobs.sort(key=lambda j: -len(SCENARIOS[j["scenario"]]()["starts"]))   # big runs first
         print(f"{len(jobs)} swarm runs on {a.workers} workers")

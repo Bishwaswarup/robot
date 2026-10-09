@@ -13,6 +13,7 @@ mujoco_menagerie
 
 # generated outputs
 results/
+Claude outputs/
 *.mp4
 *.gif
 MUJOCO_LOG.TXT

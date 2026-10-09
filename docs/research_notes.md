@@ -341,3 +341,105 @@ next: predictive swarm layer (option D) + bottleneck ordering at gates.
   predictive:phase+limiter:q, predictive:phase+gaslc_equal:q.
 - Single run (swap8, seed 0): predictive:phase+limiter:q vs reactive:limiter —
   min dist 0.66 vs 0.57 m, p99 tilt 6.6 vs 7.2°, max 10.9 vs 13.6°, urgent 40% vs 55%.
+
+### Predictive layer — 5-seed results (results/predictive, user's Mac)
+| scenario | metric | reactive:limiter | predictive:limiter:q | predictive:phase+limiter:q | predictive:phase+gaslc_equal:q |
+|---|---|---|---|---|---|
+| swap8 | urgent / min dist / contacts / p99 | 54% / 0.57 / 0.6 / 7.3° | 53% / 0.51 / 0.8 / 8.0° | 37% / 0.62 / 0 / 6.9° | 39% / 0.63 / 0 / 7.0° |
+| pillars | urgent / contacts / p99 / max | 55% / 0.4 / 8.5° / 25° | 46% / 0 / 7.5° / 19° | 38% / 0 / 7.0° / 20° | 41% / 0 / 7.0° / 21° |
+| gate | success / urgent / p99 / max | 80% / 53% / 6.3° / 16° | 80% / 54% / 5.6° / 15° | 100% / 45% / 5.3° / 15° | 100% / 43% / 4.8° / 12° |
+- No falls in any predictive config. Prediction ALONE is mixed (swap8 worse); queueing alone ≈ no
+  effect; prediction + phase timing improves all scenarios → the gait-phase effect matters in the
+  swarm once the planner gives the commander slack (core claim, revised).
+- Costs: swaps +0.5–0.6 s (4–7%) from the ~85 ms mean wait; max tilt in swap8 higher (17.8–19.7°
+  vs 13.8°) although p99 lower.
+- Viewer (Bishwa): at the gate the predictive version kept formation, did not lag, no crowding.
+- "time" for formation scenarios is floored by the reference arrival (46.7 s gate) → added
+  form_err / lag / arrive metrics.
+- Statistics: with 5 seeds the sign-flip permutation test cannot go below p = 0.0625 → 20 seeds.
+
+### Paper experiment plan (scripts/paper_runs.py)
+main: 4 scenarios × {reactive:limiter, reactive:limiter:q, predictive:limiter,
+predictive:phase+limiter, predictive:phase+gaslc_equal, predictive:phase+gaslc_equal:q} × 20 seeds
+(ablation: queueing / prediction / timing / shaping). lookahead: 0.18–0.72 s on swap8 + gate,
+10 seeds. scaling: swap16, swap32, formation16_pillars × {baseline, predictive:limiter:q, full},
+10 seeds. Paired stats (scripts/swarm_stats.py): bootstrap CI + sign-flip permutation p;
+pre-registered primary metrics: urgent/min, min_dist, p99_tilt, success (Holm-corrected).
+
+### Obstacle course (go1_bezier/course.py, scripts/course_eval.py, examples/course_demo.py)
+~46 m path, side walls: slalom poles (two on the centre line) → 1.9 m gate → chicane (two staggered
+walls, path swings to y = ±2.4) → crossing obstacle (0.4 m/s, robots take full responsibility,
++0.15 m margin) → 7-pillar field → finish straight. Team follows the waypoint path (0.3 m/s).
+Design lessons from building it:
+- Rigid formations rotating with the path swing slots through walls → CURVILINEAR slots (dx along
+  the path, dy across it), the team bends like a train.
+- Lateral width from the known course geometry: lam(s) = largest fraction of the offsets keeping
+  slots ≥ 0.75 m from static obstacles, min over [tail, +3 m] → collapses to single file
+  (queue order, 0.95 m gaps) before narrow parts and stays collapsed until the tail is through.
+- Straight-line attraction to a slot behind a wall = ORCA local minimum (a robot got stuck behind
+  the chicane wall) → path-following preference: carrot 1 m ahead of the robot's own tracked
+  path progress (windowed, so it can't jump to a neighbouring leg).
+- Static obstacles: +0.1 m ORCA margin, τ_obs = 2 s, and "urgent" also when the current command
+  reaches an (inflated) static obstacle within 1.5 s — the predictive layer otherwise passed
+  walls/poles with less clearance than reactive (deadline + slew-limited ramp react later).
+First runs (seed 0): team 1: both configs succeed, 0 contacts, equal time (reference-limited
+154 s); team 6: both succeed, 0 falls, 0 robot-robot/mover contacts; predictive:phase+gaslc_equal:q
+vs reactive:limiter: urgent 18.7 vs 28.2 /robot-min, p99 tilt 6.9 vs 8.2°, max 21 vs 29°, lag 0.17
+vs 0.23 m — but more light static-obstacle contacts (11 vs 3) before the static-urgency fix; full
+5-seed run pending (run after the paper runs).
+
+## PAPER RESULTS (results/paper, 2026-10-08) — full system = predictive:phase+gaslc_equal:q vs reactive:limiter
+Paired by seed; p = sign-flip permutation (20 seeds main, 10 seeds lookahead/scaling).
+| scenario (N) | urgent / robot-min | p99 tilt | max tilt | min dist | success | falls | time |
+|---|---|---|---|---|---|---|---|
+| swap4 (4) | +6.0** (worse) | −0.55° (−9%)* | −1.0°** | −0.016 m** | 20/20 = | 0 = | +0.57 s** (+7%) |
+| swap8 (8) | −1.9 (n.s.); urgent share −17 pp** | −0.62° (−9%)* | −0.7 n.s. | +0.014 n.s. | 20/20 = | 0 = | +0.42 s** (+3%) |
+| pillars (9) | −18.0** (−34%) | −1.81° (−21%)** | −1.4 n.s. | +0.046 (p .06) | 20/20 = | 0 = | +0.7 n.s. |
+| gate (6) | −6.8** (−29%) | −1.60° (−24%)** | −4.05°** | +0.064 m** | 19/20 = | 0 = | 0 |
+| swap16 (16) | −13.8** (−26%) | −1.60° (−19%)** | −2.1 n.s. | +0.052 m* | 10/10 = | 0 = | −0.6 n.s. |
+| swap32 (32) | −11.8** (−18%) | −1.48° (−17%)** | −1.8 n.s. | +0.036 (p .1) | 10/10 = | 0 = | −0.4 n.s. |
+| formation16 pillars (16) | −21.7** (−40%) | −2.03° (−23%)** | −4.4 (p .08) | +0.063 m* | 10/10 = | 0 = | +2.5 n.s. |
+Ablation (main): prediction alone (predictive:limiter) — worse in swaps (p99 +0.6–1.0°, slower),
+3 falls / 19/20 success in pillars; queueing alone — 2 falls in pillars, gate success 17/20.
+Timing is the active ingredient: predictive:phase+limiter already gives most of the gain; the shaped
+limiter adds a little (pillars urgent −18 vs −10/min, p99 −1.8 vs −1.4°). Only configs WITH phase
+timing had zero falls across all 480 main runs.
+Lookahead (10 seeds): urgent share falls monotonically with lookahead (−14 pp @0.18 s → −34 pp
+@0.72 s) but command changes per minute rise (53 → 114 big/robot-min) and the gate degrades at
+≥0.54 s (success 8/10, form err +0.1 m); swap8 slower at 0.72 s (+0.54 s*). Sweet spot 0.18–0.36 s
+(½–1 gait period); 0.18 s was best on gate (p99 −2.05°**, max −4.8°**, min dist +0.053 m**, 10/10).
+Scaling: benefits hold from 4 to 32 robots (largest relative gains in the densest/most obstructed
+scenarios); prediction alone gives none (swap32 robot contacts +1.6, formation16 obstacle contacts
++2.7*). Zero falls in all scaling runs.
+Weak spots: (1) sparse swap4 — more urgent events and +7% time (little to gain, waiting costs);
+(2) robot-obstacle contacts up with prediction (formation16 +2.0 n.s., pillars/gate small) → port
+the static-obstacle urgency (TTC to inflated obstacles < 1.5 s → react now) from course_eval into
+swarm_eval and re-run the obstacle scenarios; (3) primary-metric p-values are mostly ≤ 0.002 and
+survive Holm correction; secondary metrics should be reported as exploratory.
+
+## OBSTACLE COURSE (results/course, speed 0.45 m/s, 5 seeds, paired vs reactive:limiter)
+All 30 runs finished. Full system (predictive:phase+gaslc_equal:q):
+- Team 6: urgent/robot-min 45.3 -> 26.4 (-42%, lower in 5/5 seeds), p99 tilt 8.4 -> 6.9 deg (5/5),
+  static-obstacle contacts 1.8 -> 0 per run, obstacle clearance 0.22 -> 0.32 m, robot min dist 0.59 -> 0.63 m,
+  0 falls, time 114.6 -> 111.7 s. Seed 3 had 2 robot-robot touches (max tilt 24 deg) — the only blemish.
+- Team 1: time 104.8 -> 102.7 s, p99 6.1 -> 5.2 deg, clearance 0.28 -> 0.38 m, lag 0.85 -> 0.53 m.
+- Prediction without phase (predictive:limiter:q): faster, but 1 fall (max tilt 59 deg) and 1 robot-robot
+  touch in team 6, p99 unchanged — same pattern as the paper runs.
+- Where the time goes: chicane is the slowest section (35 s solo, 47 s team); pillars is where prediction
+  saves the most (-3 to -5 s).
+Caveats: with 5 seeds the smallest possible two-sided p is 0.0625, so nothing can reach p<0.05 -> rerun with
+10-20 seeds. The moving obstacle never came close to the solo robot (clearance 1.83 m) and stayed >=0.42 m
+from the team -> the crossing currently isn't a test; retime the mover to cross the robot's path. The
+slalom path runs nearly straight between the pillar rows (y ~ -0.5) -> make it actually weave.
+
+### Course v2 + obstacle-safety suite (2026-10-09)
+- Old course results kept in results/course_v1.
+- Slalom: 3 poles on the centre line (x=4,6,8), path weaves +-1.3 m (pole clearance >= 0.79 m centre);
+  teams fall into single file (start moved to x=-3 to give room).
+- Crossing: two movers (x=22.5 up, x=25 down, 0.4 m/s) timed from the reference speed to pass y=0 when
+  the lead row / last row is ~1 m short. Smoke test (speed 0.45, 1 seed): mover clearance 1.83 m -> 0.5 m
+  (robots now have to avoid), team-6 baseline fell once, full system 0 falls, p99 9.0 -> 7.1 deg.
+- swarm_eval: opt-in static safety (margin 0.1, tau_obs 2, static TTC 1.5); defaults reproduce the
+  paper runs exactly (checked gate/full/seed 0). paper_runs suite "obstacles": pillars9, gate6,
+  pillars16 x {base, pred:limiter:q, pred:phase+limiter:q, full} x 15 seeds. Smoke: gate full seed 0
+  obstacle touch 1 -> 0.

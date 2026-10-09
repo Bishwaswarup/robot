@@ -37,11 +37,29 @@ def formation_gate(gap=1.9, wall_x=7.0, half_len=6.0):
     return dict(name="formation6_gate", starts=starts, goals=None, plan=plan, obstacles=wall, T=70.0)
 
 
+def formation_pillars16():
+    offs = [(-dx, dy) for dx in (0.0, 1.4, 2.8, 4.2) for dy in (-2.1, -0.7, 0.7, 2.1)]
+    plan = FormationPlan(start=(0, 0), goal=(18, 0), offsets=offs, speed=0.35)
+    starts = [(ox, oy, 0.0) for ox, oy in offs]
+    rng = np.random.default_rng(7)                      # fixed pillar field
+    pillars, tries = [], 0
+    while len(pillars) < 9 and tries < 1000:
+        tries += 1
+        q = (rng.uniform(6, 13), rng.uniform(-3.5, 3.5))
+        if all(np.hypot(q[0] - p[0], q[1] - p[1]) > 2.0 for p, _ in pillars):
+            pillars.append((q, 0.3))
+    return dict(name="formation16_pillars", starts=starts, goals=None, plan=plan, obstacles=pillars, T=75.0)
+
+
 SCENARIOS = {
     "swap4": lambda: swap(4, 2.5),
     "swap8": lambda: swap(8, 4.0),
     "formation9_pillars": formation_pillars,
     "formation6_gate": formation_gate,
+    # scaling
+    "swap16": lambda: swap(16, 6.0),
+    "swap32": lambda: swap(32, 9.0),
+    "formation16_pillars": formation_pillars16,
 }
 
 
