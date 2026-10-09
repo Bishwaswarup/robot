@@ -24,11 +24,18 @@ def wrap(a):
 
 class SwarmAgent:
     def __init__(self, radius=0.38, v_max=0.6, tau=2.0, tau_obs=1.0, dt=0.1, sense_radius=4.0,
-                 max_neighbours=10, keep_right_deg=15.0, k_heading=2.0, w_max=1.2, vy_max=0.35):
+                 max_neighbours=10, keep_right_deg=15.0, k_heading=2.0, w_max=1.2, vy_max=0.35,
+                 turn_gate=False):
         self.r, self.v_max, self.tau, self.tau_obs, self.dt = radius, v_max, tau, tau_obs, dt
         self.sense_radius, self.max_nb = sense_radius, max_neighbours
         self.keep_right = np.radians(keep_right_deg)
         self.k_heading, self.w_max, self.vy_max = k_heading, w_max, vy_max
+        # turn_gate: keep body commands inside the envelope the gait was stress-tested on
+        # (|wz| <= 1.0, |vy| <= 0.3) and slow down while the heading error is large
+        # (turn first, then walk) - avoids fast sideways walking + max yaw rate together
+        self.turn_gate = turn_gate
+        if turn_gate:
+            self.w_max, self.vy_max = min(w_max, 1.0), min(vy_max, 0.3)
         self.v_prev = np.zeros(2)          # ORCA uses the last chosen velocity (reciprocity)
         self.heading_ref = None
 
@@ -54,7 +61,10 @@ class SwarmAgent:
             if speed > 0.15:
                 self.heading_ref = np.arctan2(v_world[1], v_world[0])
             heading = yaw if self.heading_ref is None else self.heading_ref
-        wz = float(np.clip(self.k_heading * wrap(heading - yaw), -self.w_max, self.w_max))
+        err = wrap(heading - yaw)
+        wz = float(np.clip(self.k_heading * err, -self.w_max, self.w_max))
+        if self.turn_gate:      # full speed below 30 deg heading error, 30 % at >= 90 deg
+            v_world = np.asarray(v_world, float) * float(np.interp(abs(err), [np.radians(30), np.radians(90)], [1.0, 0.3]))
         vb = rot(-yaw) @ v_world
         return float(vb[0]), float(np.clip(vb[1], -self.vy_max, self.vy_max)), wz
 

@@ -443,3 +443,34 @@ slalom path runs nearly straight between the pillar rows (y ~ -0.5) -> make it a
   paper runs exactly (checked gate/full/seed 0). paper_runs suite "obstacles": pillars9, gate6,
   pillars16 x {base, pred:limiter:q, pred:phase+limiter:q, full} x 15 seeds. Smoke: gate full seed 0
   obstacle touch 1 -> 0.
+
+### Course v1 at 20 seeds (speed 0.45; old course - the new course.py had been overwritten on the Mac)
+Results kept in results/course_v1_20seeds. Paired sign-flip p (20 seeds), full system vs reactive:limiter:
+- Team 6: p99 tilt 8.44 -> 6.90 deg (better in 20/20, p<.0001); urgent/robot-min 43.9 -> 28.5 (-35%, p=.0001);
+  robot min dist 0.571 -> 0.618 m (p=.0003); max tilt 18.8 -> 16.5 (p=.04); obstacle-contact onsets
+  27 -> 1 in total (runs with a contact 5 -> 1; p=.06, contacts clumped in a few runs); time equal (112.6 vs 112.8 s).
+- Team 1: time 104.6 -> 102.7 s (20/20), p99 6.1 -> 4.9 deg (20/20), max 12.0 -> 9.1 deg (19/20),
+  obstacle clearance 0.33 -> 0.41 m (p=.0003), urgent -19% (p=.005), lag 0.84 -> 0.59 m.
+- Prediction without phase (pred:limiter:q), team 6: urgent -22% and p99 -0.5 deg, but max tilt unchanged
+  and the only fall in 120 runs (59 deg); full system is better on every safety metric.
+- User-added fixes kept: n/a for single-robot metrics, makedirs before writing, tests/test_course_eval.py.
+
+### Course v2 (20 seeds, speed 0.45) + obstacle-safety suite (15 seeds) - 2026-10-09
+Course v2 team 6: full system p99 7.8 vs 9.0 deg and urgent 32 vs 39/min, BUT 3 falls (seeds 4, 12, 13)
+and 1 failure (seed 12) vs 0 for baseline / prediction-only (Fisher p ~ 0.23; still bad optics).
+Diagnosis (fall_where logging added to both eval scripts; seed 12 reproduces on Linux):
+- seed 12: no contact. Robot 0 at the first slalom corner (4.0, -1.1) faced -90 deg from its travel
+  direction; ORCA direction flipped -> heading target flipped -> commands saturated at
+  vx 0.5 + vy 0.27-0.35 + wz 1.0-1.2 simultaneously (outside the stress-tested box |vy|<=0.3, |wz|<=1.0);
+  roll 15 -> 60 deg in 0.8 s. Single-robot sweep: such combos alone give up to 16 deg tilt (no fall),
+  so it is the combination with fast re-targeting.
+- Swarm obstacle suite falls (all configs, incl. baseline): every one after a pillar contact at the same
+  pillars ((8.0,0.3) in pillars9, (6.25,0.10) in pillars16), robot centre ~0.55 m from pillar centre
+  (ORCA wants 0.78): squeezed by neighbours + command tracking lag. Shared weakness, not timing-specific.
+Fix (opt-in, --turn-gate): SwarmAgent body-command envelope |wz|<=1.0, |vy|<=0.3, and translation
+scaled 1.0 -> 0.3 as heading error goes 30 -> 90 deg (turn first, then walk). Cloud check seed 12:
+full system fall -> 0 falls (max 14 deg); baseline 132.8 -> 125.9 s, urgent 46 -> 33/min with the gate.
+Obstacle suite (static safety on, 15 seeds), full vs base: pillars9 urgent -15.7/min**, p99 -1.40**,
+min dist +0.069**; gate p99 -1.95**, max -4.1**, min dist +0.057*; pillars16 p99 -1.99**, min dist
++0.068**, urgent -21.1** but 13/15 success (1 fall, 1 stuck) vs 15/15. Obstacle touches with safety:
+full 0.4 / 0 / 0.5 per run (pillars9 / gate / pillars16) vs 1.05 / 0.45 / 2.5 without.

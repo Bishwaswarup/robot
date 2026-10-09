@@ -66,7 +66,8 @@ def run(job, on_step=None):
         c.gait.phi = rng.uniform()
     cache = {}
     coms = [make_commander(c, strategy, cmap, env, cache) for c in ctrls]
-    agents = [SwarmAgent(radius=R_ROBOT, tau_obs=job.get("tau_obs", 2.0)) for _ in range(N)]
+    agents = [SwarmAgent(radius=R_ROBOT, tau_obs=job.get("tau_obs", 2.0), turn_gate=bool(job.get("turn_gate", 0)))
+              for _ in range(N)]
     trunk = [m.body(f"go1_{i}/trunk").id for i in range(N)]
     root_of = np.array([m.body_rootid[m.geom_bodyid[g]] for g in range(m.ngeom)])
     robot_of_root = {trunk[i]: i for i in range(N)}
@@ -98,6 +99,8 @@ def run(job, on_step=None):
     done_t = np.nan
     paths = [[] for _ in range(N)] if job.get("record") else None
     mover_path = [] if job.get("record") else None
+    fall_log = []                                # where/when robots fell, and what they touched just before
+    last_obs, last_rob = np.full(N, -1e9), np.full(N, -1e9)
     t0 = d.time
     for k in range(n_steps):
         t = d.time - t0
@@ -174,6 +177,10 @@ def run(job, on_step=None):
                     (now_rm if other in mover_bodies else now_ro).add(rob)
             rr_ev += len(now_rr - rr_pairs); ro_ev += len(now_ro - ro_set); rm_ev += len(now_rm - rm_set)
             rr_pairs, ro_set, rm_set = now_rr, now_ro, now_rm
+            for r_ in now_ro | now_rm:
+                last_obs[r_] = t
+            for a_, b_ in now_rr:
+                last_rob[a_] = last_rob[b_] = t
             if paths is not None and k % (5 * tick) == 0:
                 for i in range(N):
                     paths[i].append(pos[i].tolist())
@@ -197,10 +204,13 @@ def run(job, on_step=None):
                 tilts[i].append(np.degrees(np.arccos(np.clip(up, -1, 1))))
             if not fallen[i] and (d.xpos[trunk[i]][2] < 0.15 or up < 0.5):
                 fallen[i] = True
+                fall_log.append(f"r{i}@{d.time - t0:.1f}s({d.xpos[trunk[i]][0]:.2f},{d.xpos[trunk[i]][1]:.2f})"
+                                f"{'/obs' if d.time - t0 - last_obs[i] < 1.5 else ''}"
+                                f"{'/rob' if d.time - t0 - last_rob[i] < 1.5 else ''}")
                 ctrls[i].set_stand()
     sim_t = d.time - t0
     allt = np.concatenate([np.array(x) for x in tilts if x])
-    res = dict(job, N=N, success=int(np.isfinite(done_t)), time=round(done_t, 2) if np.isfinite(done_t) else np.nan,
+    res = dict(job, N=N, fall_where=";".join(fall_log), success=int(np.isfinite(done_t)), time=round(done_t, 2) if np.isfinite(done_t) else np.nan,
                falls=int(fallen.sum()), rr_contacts=rr_ev, obstacle_contacts=ro_ev, mover_contacts=rm_ev,
                min_dist_robots=round(dmin_rr, 3) if np.isfinite(dmin_rr) else np.nan,
                min_clear_obstacle=round(dmin_obs, 3), min_clear_mover=round(dmin_mover, 3),
@@ -313,6 +323,7 @@ def main():
     ap.add_argument("--seeds", type=int, default=5)
     ap.add_argument("--speed", type=float, default=0.3, help="reference speed along the path (m/s)")
     ap.add_argument("--urgent-ttc", type=float, default=0.8)
+    ap.add_argument("--turn-gate", action="store_true", help="body-command envelope: |wz|<=1, |vy|<=0.3, slow while turning")
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 1))
     ap.add_argument("--out", default=os.path.join(ROOT, "results", "course"))
     ap.add_argument("--analyse-only", action="store_true")
@@ -323,7 +334,8 @@ def main():
         rows = list(csv.DictReader(open(path)))
     else:
         seeds = 1 if a.quick else a.seeds
-        jobs = [dict(team=int(tm), config=c, seed=s, speed=a.speed, urgent_ttc=a.urgent_ttc, record=int(s == 0))
+        jobs = [dict(team=int(tm), config=c, seed=s, speed=a.speed, urgent_ttc=a.urgent_ttc, record=int(s == 0),
+                     turn_gate=int(a.turn_gate))
                 for tm, s, c in itertools.product(a.teams.split(","), range(seeds), a.configs.split(","))]
         jobs.sort(key=lambda j: -j["team"])
         print(f"{len(jobs)} course runs on {a.workers} workers")

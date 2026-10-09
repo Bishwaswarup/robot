@@ -110,7 +110,8 @@ def run(job):
     margin = job.get("static_margin", 0.0)
     obst = [(q, r + margin) for q, r in sc["obstacles"]]
     static_ttc = job.get("static_ttc") or job["urgent_ttc"]
-    agents = [SwarmAgent(radius=R_ROBOT, **({"tau_obs": job["tau_obs"]} if job.get("tau_obs") else {}))
+    agents = [SwarmAgent(radius=R_ROBOT, turn_gate=bool(job.get("turn_gate", 0)),
+                         **({"tau_obs": job["tau_obs"]} if job.get("tau_obs") else {}))
               for _ in range(N)]
     trunk = [m.body(f"go1_{i}/trunk").id for i in range(N)]
     root_of = np.array([m.body_rootid[m.geom_bodyid[g]] for g in range(m.ngeom)])
@@ -133,6 +134,8 @@ def run(job):
     paths = [[] for _ in range(N)] if job.get("record") else None
     form_err, lag = [], []                       # formation scenarios (10 Hz)
     arrive = np.full(N, np.nan)                  # goal scenarios: first arrival per robot
+    fall_log = []                                # where/when robots fell, and what they touched just before
+    last_obs, last_rob = np.full(N, -1e9), np.full(N, -1e9)
     t0 = d.time
     for k in range(n_steps):
         t = d.time - t0
@@ -217,6 +220,10 @@ def run(job):
             rr_events += len(now_rr - rr_pairs)
             ro_events += len(now_ro - ro_pairs)
             rr_pairs, ro_pairs = now_rr, now_ro
+            for r_ in now_ro:
+                last_obs[r_] = t
+            for a_, b_ in now_rr:
+                last_rob[a_] = last_rob[b_] = t
             if not np.isnan(done_t) and t > done_t + 1.0:
                 break
         for i in range(N):
@@ -233,11 +240,14 @@ def run(job):
                 tilts[i].append(np.degrees(np.arccos(np.clip(up, -1, 1))))
             if not fallen[i] and (d.xpos[trunk[i]][2] < 0.15 or up < 0.5):
                 fallen[i] = True
+                fall_log.append(f"r{i}@{d.time - t0:.1f}s({d.xpos[trunk[i]][0]:.2f},{d.xpos[trunk[i]][1]:.2f})"
+                                f"{'/obs' if d.time - t0 - last_obs[i] < 1.5 else ''}"
+                                f"{'/rob' if d.time - t0 - last_rob[i] < 1.5 else ''}")
                 ctrls[i].set_stand()
     sim_t = d.time - t0
     allt = np.concatenate([np.array(x) for x in tilts if x])
     big = sum(cm_.n_big for cm_ in coms)
-    res = dict(job, N=N, success=int(not np.isnan(done_t)), time=round(done_t, 2) if np.isfinite(done_t) else np.nan,
+    res = dict(job, N=N, fall_where=";".join(fall_log), success=int(not np.isnan(done_t)), time=round(done_t, 2) if np.isfinite(done_t) else np.nan,
                falls=int(fallen.sum()), rr_contacts=rr_events, ro_contacts=ro_events, min_dist=round(dmin, 3),
                mean_tilt=round(float(allt.mean()), 3), p99_tilt=round(float(np.percentile(allt, 99)), 3),
                max_tilt=round(float(allt.max()), 2),
@@ -333,6 +343,7 @@ def main():
                                          "predictive:phase+limiter:q,predictive:phase+gaslc_equal:q")
     ap.add_argument("--lookahead", type=float, default=0.36, help="s (one gait period)")
     ap.add_argument("--urgent-ttc", type=float, default=0.8)
+    ap.add_argument("--turn-gate", action="store_true", help="body-command envelope (see SwarmAgent)")
     ap.add_argument("--static-safety", action="store_true",
                     help="obstacle margin 0.1 m, tau_obs 2 s, urgent if TTC to an obstacle < 1.5 s")
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 1))
@@ -346,7 +357,7 @@ def main():
     else:
         scen = ["swap4", "swap8"] if a.quick else a.scenarios.split(",")
         seeds = 1 if a.quick else a.seeds
-        extra = STATIC_SAFETY if a.static_safety else {}
+        extra = dict(STATIC_SAFETY if a.static_safety else {}, turn_gate=int(a.turn_gate))
         jobs = [dict(scenario=s, config=cf, seed=sd, urgent_ttc=a.urgent_ttc, lookahead=a.lookahead,
                      record=int(sd == 0), **extra)
                 for s, sd, cf in itertools.product(scen, range(seeds), a.configs.split(","))]

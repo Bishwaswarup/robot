@@ -10,6 +10,7 @@ Run:  python scripts/paper_runs.py --quick                 (~10-15 min, 2 seeds,
       python scripts/paper_runs.py                         (all suites; long - overnight)
       python scripts/paper_runs.py --suites main           (one suite)
       python scripts/paper_runs.py --suites obstacles      (obstacle-safety re-run)
+      python scripts/paper_runs.py --suites obstacles --turn-gate   (+ body-command envelope)
       python scripts/paper_runs.py --analyse-only          (re-make summaries + stats)
 Out:  results/paper/<suite>/swarm_eval.csv, swarm_summary.txt, swarm_stats.txt, swarm_paths_*.png
 """
@@ -54,13 +55,17 @@ SUITES = {
 }
 
 
-def run_suite(name, spec, quick, workers, urgent_ttc):
-    out = os.path.join(ROOT, "results", "paper", name + ("_quick" if quick else ""))
+def suite_dir(name, quick, turn_gate):
+    return os.path.join(ROOT, "results", "paper", name + ("_gate" if turn_gate else "") + ("_quick" if quick else ""))
+
+
+def run_suite(name, spec, quick, workers, urgent_ttc, turn_gate=False):
+    out = suite_dir(name, quick, turn_gate)
     os.makedirs(out, exist_ok=True)
     scen = spec.get("quick_scenarios", spec["scenarios"]) if quick else spec["scenarios"]
     seeds = spec["quick_seeds"] if quick else spec["seeds"]
     jobs = [dict(scenario=s, config=c, seed=sd, urgent_ttc=urgent_ttc, lookahead=0.36, record=int(sd == 0),
-                 **spec.get("job", {}))
+                 turn_gate=int(turn_gate), **spec.get("job", {}))
             for s, sd, c in itertools.product(scen, range(seeds), spec["configs"])]
     jobs.sort(key=lambda j: -len(SE.SCENARIOS[j["scenario"]]()["starts"]))
     print(f"\n[{name}] {len(jobs)} runs on {workers} workers -> {os.path.relpath(out, ROOT)}")
@@ -96,12 +101,15 @@ def main():
                     help="comma list of: " + ",".join(SUITES))
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 1))
     ap.add_argument("--urgent-ttc", type=float, default=0.8)
+    ap.add_argument("--turn-gate", action="store_true",
+                    help="body-command envelope for every robot (|wz|<=1, |vy|<=0.3, slow while turning); "
+                         "results go to results/paper/<suite>_gate")
     ap.add_argument("--analyse-only", action="store_true")
     a = ap.parse_args()
     for name in a.suites.split(","):
-        out = os.path.join(ROOT, "results", "paper", name + ("_quick" if a.quick else ""))
+        out = suite_dir(name, a.quick, a.turn_gate)
         if not a.analyse_only:
-            out = run_suite(name, SUITES[name], a.quick, a.workers, a.urgent_ttc)
+            out = run_suite(name, SUITES[name], a.quick, a.workers, a.urgent_ttc, a.turn_gate)
         analyse(out)
 
 

@@ -69,3 +69,16 @@ def test_predictive_reacts_earlier_than_reactive():
     v_react = a.velocity(p, pref(p), nb, [])
     v_pred = b.predictive(p, v, pref, nb, [], lookahead=0.36)
     assert abs(v_pred[1]) >= abs(v_react[1]) - 1e-9
+
+
+def test_turn_gate_limits_body_command():
+    import numpy as np
+    from go1_bezier.swarm import SwarmAgent
+    free, gated = SwarmAgent(), SwarmAgent(turn_gate=True)
+    v = np.array([0.0, 0.6])                       # wants to go +y, robot faces +x (90 deg error)
+    vx0, vy0, wz0 = free.body_command(v, 0.0)
+    vx1, vy1, wz1 = gated.body_command(v, 0.0)
+    assert abs(wz0) == 1.2 and abs(vy0) == 0.35    # old limits
+    assert abs(wz1) <= 1.0 + 1e-9 and abs(vy1) <= 0.6 * 0.3 + 1e-9   # slowed to 30 % while turning
+    a, b = SwarmAgent(turn_gate=True), SwarmAgent()
+    assert np.allclose(a.body_command(np.array([0.5, 0.0]), 0.0), b.body_command(np.array([0.5, 0.0]), 0.0))
