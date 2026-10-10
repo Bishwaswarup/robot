@@ -89,8 +89,9 @@ ROBUST = dict(STATIC_SAFETY, turn_gate=1, escape=1)    # + body-command envelope
 # (escape=2 and lag_priority=1 were tried on top and REJECTED: more timeouts - see research notes)
 
 
-def run(job, on_step=None):
-    """on_step(m, d, k) is called after every physics step (media rendering); return False to stop."""
+def run(job, on_step=None, on_setup=None):
+    """on_step(m, d, k) is called after every physics step (media rendering); return False to stop.
+    on_setup(m, d, ctrls, coms) is called once the robots stand, before the run (validation hooks)."""
     layer, strategy, queue = parse_config(job["config"])
     job = dict(job, strategy=strategy)
     look = parse_lookahead(job["config"], job.get("lookahead", 0.36))
@@ -106,7 +107,8 @@ def run(job, on_step=None):
         c.gait.phi = rng.uniform()                        # robots are not phase-locked
     env = PushEnvelope.load(ENV) if os.path.exists(ENV) else None
     cache = {}
-    coms = [make_commander(c, job["strategy"], cmap, env, cache) for c in ctrls]
+    coms = [make_commander(c, job["strategy"], cmap, env, cache, rng=np.random.default_rng([job["seed"], 7, i]))
+            for i, c in enumerate(ctrls)]
     # static-obstacle safety (opt-in; off = the original paper runs): ORCA sees obstacles inflated
     # by static_margin, looks tau_obs ahead of them, and a command heading into one within
     # static_ttc counts as urgent (the slew-limited ramp needs a longer warning than robots do)
@@ -126,6 +128,8 @@ def run(job, on_step=None):
         mujoco.mj_step(m, d)
     for c in ctrls:
         c.set_command(0, 0, 0)
+    if on_setup is not None:
+        on_setup(m, d, ctrls, coms)
 
     vel = np.zeros((N, 2))
     alpha = dt / 0.15

@@ -1,0 +1,36 @@
+==============================================================================================================
+SWARM TEST  (ORCA + formation -> commander -> Bezier trot; mean over seeds)
+==============================================================================================================
+
+swap4
+  config                                 success    time falls robot-robot robot-obst min dist   tilt    p99    max | big/rob/min in-domain  urgent   wait | form err    lag arrive
+  predictive:phase+gaslc_equal:q            100%    9.0s     0         0.0        0.0    0.69m  1.74°   5.3°  10.1° |        54.3        0%     19% 0.090s |     nanm   nanm   8.8s
+  predictive:worst+gaslc_equal:q            100%    9.0s     0         0.0        0.0    0.71m  1.90°   6.7°  11.5° |        52.9        0%     24% 0.078s |     nanm   nanm   8.8s
+  predictive:sham+gaslc_equal:q             100%    8.9s     0         0.0        0.0    0.71m  1.78°   6.0°  10.2° |        53.5        0%     16% 0.093s |     nanm   nanm   8.8s
+  reactive:limiter                          100%    8.5s     0         0.0        0.0    0.69m  1.76°   5.9°  12.8° |        25.5        0%     19% 0.000s |     nanm   nanm   8.3s
+
+swap8
+  config                                 success    time falls robot-robot robot-obst min dist   tilt    p99    max | big/rob/min in-domain  urgent   wait | form err    lag arrive
+  predictive:phase+gaslc_equal:q            100%   15.3s     0         0.1        0.0    0.56m  1.87°   6.5°  13.3° |        71.2        0%     39% 0.087s |     nanm   nanm  15.0s
+  predictive:worst+gaslc_equal:q            100%   15.4s     0         0.1        0.0    0.55m  1.91°   6.9°  11.8° |        62.7        0%     40% 0.083s |     nanm   nanm  14.9s
+  predictive:sham+gaslc_equal:q             100%   15.2s     0         0.0        0.0    0.55m  1.88°   6.6°  13.0° |        65.5        0%     39% 0.090s |     nanm   nanm  14.8s
+  reactive:limiter                          100%   14.9s     0         0.2        0.0    0.54m  1.95°   7.4°  18.4° |        52.7        0%     56% 0.000s |     nanm   nanm  14.5s
+
+formation9_pillars
+  config                                 success    time falls robot-robot robot-obst min dist   tilt    p99    max | big/rob/min in-domain  urgent   wait | form err    lag arrive
+  predictive:phase+gaslc_equal:q            100%   47.7s     0         0.1        0.0    0.57m  1.53°   5.8°  12.9° |        72.3        1%     39% 0.092s |   0.577m  0.43m   nans
+  predictive:worst+gaslc_equal:q             95%   46.9s     0         0.0        0.2    0.58m  1.58°   6.2°  15.8° |        70.5        2%     41% 0.086s |   0.596m  0.45m   nans
+  predictive:sham+gaslc_equal:q             100%   47.4s     0         0.1        0.1    0.53m  1.58°   6.1°  17.1° |        72.9        2%     40% 0.090s |   0.586m  0.43m   nans
+  reactive:limiter                          100%   44.7s     0         0.1        0.0    0.51m  1.73°   7.1°  17.1° |        72.8        1%     55% 0.000s |   0.519m  0.41m   nans
+
+formation6_gate
+  config                                 success    time falls robot-robot robot-obst min dist   tilt    p99    max | big/rob/min in-domain  urgent   wait | form err    lag arrive
+  predictive:phase+gaslc_equal:q            100%   46.8s     0         0.0        0.0    0.64m  1.32°   4.6°  13.8° |        37.4        2%     44% 0.092s |   0.132m  0.05m   nans
+  predictive:worst+gaslc_equal:q            100%   46.7s     0         0.0        0.0    0.63m  1.34°   4.9°  15.0° |        36.6        2%     45% 0.086s |   0.138m  0.06m   nans
+  predictive:sham+gaslc_equal:q             100%   47.0s     0         0.0        0.0    0.62m  1.34°   4.8°  12.4° |        38.2        3%     45% 0.091s |   0.162m  0.08m   nans
+  reactive:limiter                          100%   46.9s     0         0.0        0.0    0.60m  1.43°   5.8°  14.6° |        42.0        1%     59% 0.000s |   0.147m  0.07m   nans
+
+  big = command change >= 0.15 m/s (or 0.3 rad/s); in-domain = like the events the capability map
+  was measured on (settled straight walking, single change <= 0.8); urgent = TTC below threshold.
+  form err = mean distance robot-to-slot (formation scenarios); lag = how far the formation trails
+  its reference; arrive = mean per-robot arrival time (swap scenarios).

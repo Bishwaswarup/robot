@@ -15,6 +15,12 @@ Strategies (for experiments):
                      planar+yaw jumps, > 0.8 m/s, from non-straight or unsettled walking)
                      fall back to the uniform slew limiter
     "phase_soft"     best phase + a soft limiter (2x the default acceleration limits)
+
+Release rule (controls for the timing claim; set by gasl.make_commander from the strategy name):
+    best    release at the phase with the lowest predicted cost (default)
+    random  "sham timing": wait a uniformly random time from the same window, ignoring the map
+            (same mean wait as best when the best phase is spread over the window)
+    worst   release at the phase with the HIGHEST predicted cost
     "gasl_fast"      no waiting; gait-aware slew limiter, never below the uniform limit
     "gasl_equal"     no waiting; gait-aware slew limiter, same average limit as uniform
                      (both need envelope=PushEnvelope; see go1_bezier/gasl.py)
@@ -41,7 +47,7 @@ SOFT = (3.0, 2.0, 6.0)
 
 class PhaseAwareCommander:
     def __init__(self, ctrl, cmap=None, strategy="phase", max_wait=0.5, big_change=0.15,
-                 fall_weight=50.0, envelope=None, gasl=None):
+                 fall_weight=50.0, envelope=None, gasl=None, release_rule="best", rng=None):
         base, _, lead = strategy.partition("@")          # e.g. "gasl_fast@0.125" = phase lead
         assert base in STRATEGIES, strategy
         self.c, self.cmap, self.env = ctrl, cmap, envelope
@@ -49,6 +55,9 @@ class PhaseAwareCommander:
         self.max_wait = max_wait            # gait periods
         self.big_change = big_change        # m/s (planar) or rad/s/2 (yaw): below this, apply now
         self.fall_weight = fall_weight      # deg of tilt per unit fall probability in the cost
+        assert release_rule in ("best", "random", "worst"), release_rule
+        self.release_rule = release_rule
+        self.rng = rng if rng is not None else np.random.default_rng(0)
         ctrl.acc_max = {"raw": None, "phase": None, "phase_safe": None,
                         "phase_soft": np.asarray(SOFT, float)}.get(strategy, np.asarray(LIMITS, float))
         self.pending = None                 # (target, release_time)
@@ -68,9 +77,10 @@ class PhaseAwareCommander:
         self.log = []                       # (t_request, t_release, wait_s, key)
 
     # ------------------------------------------------------------------ API
-    def request(self, vx, vy, wz, urgent=False, deadline=None):
+    def request(self, vx, vy, wz, urgent=False, deadline=None, force_wait=None):
         """deadline (s): the change is needed no later than this (planned manoeuvre from a
-        predictive layer); timing strategies may wait up to min(max_wait, deadline)."""
+        predictive layer); timing strategies may wait up to min(max_wait, deadline).
+        force_wait (gait periods): override the release time of a timed event (validation only)."""
         target = np.array([vx, vy, wz], float)
         ref = self.pending[0] if self.pending is not None else self.c.cmd_target
         if np.allclose(target, ref, atol=1e-3):
@@ -98,23 +108,54 @@ class PhaseAwareCommander:
                 self._release(target, 0.0)
                 return
             self.c.acc_max = None
-        kind = "cmd_raw" if self.strategy in ("phase", "phase_safe") else "cmd_lim"
-        v0 = float(np.clip(self.c.cmd_target[0], 0.0, 0.4))
-        direction, size = key
-        best = None
-        max_wait = self.max_wait if deadline is None else min(self.max_wait, deadline / self.c.gait.period)
-        for w in np.linspace(0.0, max_wait, max(2, int(64 * max_wait) + 1)):
-            p = (self.c.gait.phi + w) % 1.0
-            pr = self.cmap.predict(kind, v0, direction, size, p)
-            cost = pr["tilt"] + self.fall_weight * (pr["fall"] if np.isfinite(pr["fall"]) else 0.0)
-            if np.isfinite(cost) and (best is None or cost < best[1] - 1e-9):
-                best = (w, cost)
-        wait_s = (best[0] if best else 0.0) * self.c.gait.period
+        waits, cost = self.phase_costs(key, deadline)
+        if self.release_rule == "random":
+            w = float(self.rng.choice(waits))
+        else:
+            sign = -1.0 if self.release_rule == "worst" else 1.0
+            w, bc = 0.0, None                                # first strict optimum, as before
+            for wj, cj in zip(waits, sign * cost):
+                if np.isfinite(cj) and (bc is None or cj < bc - 1e-9):
+                    w, bc = float(wj), cj
+        if force_wait is not None:                           # validation experiments only
+            w = float(force_wait)
+        wait_s = w * self.c.gait.period
         self.pending = (target, self.t + wait_s)
         self.pending_key = key
         self.log.append((self.t, self.t + wait_s, wait_s, key))
         if wait_s <= 0.0:
             self._flush()
+
+    def timed(self, target, urgent=False, deadline=None):
+        """Would request(target) be held and timed (rather than released at once or merged)?"""
+        target = np.asarray(target, float)
+        ref = self.pending[0] if self.pending is not None else self.c.cmd_target
+        key = self._event_key(target)
+        if np.allclose(target, ref, atol=1e-3) or key is None:
+            return False
+        if self.pending is not None and not urgent and self._similar(key, self.pending_key):
+            return False
+        if self.strategy in IMMEDIATE or urgent or self.cmap is None:
+            return False
+        return not (self.strategy == "phase_safe" and deadline is None and not self.in_domain(target))
+
+    def wait_grid(self, deadline=None):
+        """Candidate waits (gait periods) the commander chooses from."""
+        max_wait = self.max_wait if deadline is None else min(self.max_wait, deadline / self.c.gait.period)
+        return np.linspace(0.0, max_wait, max(2, int(64 * max_wait) + 1))
+
+    def phase_costs(self, key, deadline=None, waits=None, parts=False):
+        """Predicted cost (tilt + fall_weight * fall) of releasing event `key` after each wait."""
+        kind = "cmd_raw" if self.strategy in ("phase", "phase_safe") else "cmd_lim"
+        v0 = float(np.clip(self.c.cmd_target[0], 0.0, 0.4))
+        direction, size = key
+        waits = self.wait_grid(deadline) if waits is None else np.asarray(waits, float)
+        tilt, fall = np.full(len(waits), np.nan), np.full(len(waits), np.nan)
+        for j, w in enumerate(waits):
+            pr = self.cmap.predict(kind, v0, direction, size, (self.c.gait.phi + w) % 1.0)
+            tilt[j], fall[j] = pr["tilt"], pr["fall"]
+        cost = tilt + self.fall_weight * np.where(np.isfinite(fall), fall, 0.0)
+        return (waits, cost, tilt, fall) if parts else (waits, cost)
 
     def step(self):
         """Call once per physics step (replaces ctrl.step())."""

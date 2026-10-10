@@ -25,6 +25,7 @@ results/paper/*
 !results/paper/paper_tables.md
 !results/paper/primary_tests.csv
 !results/course/
+!results/map_validation/
 !results/pilot_phase.csv
 !results/push_envelope.csv
 !results/commander_eval.csv
@@ -50,3 +51,4 @@ paper/*.blg
 paper/*.bbl
 paper/*.synctex.gz
 paper/main.pdf
+paper.zip

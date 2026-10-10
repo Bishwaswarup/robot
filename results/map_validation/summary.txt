@@ -1,0 +1,50 @@
+CAPABILITY MAP INSIDE THE SWARM - counterfactual replay of real full-system events
+488 events from 20 runs (formation9_pillars 150, swap16 150, formation6_gate 102, swap8 86); 9 candidate waits each; tilt = peak over 1.0 s from the request
+replay fidelity (commander's own choice vs the original run): max |dq| median 0.0e+00, max 0.0e+00  (100% of events reproduce to 1e-6)
+context: in map domain 2%; settled 63%; combined planar+yaw 37%; previous release < 1 gait period ago 92%; median command updates released in the last 0.5 s 5
+
+A  ISOLATED STEPS (calibration, from results/capability_summary.txt)
+   held-out repeat, cmd_lim: phase-aware R2 0.983 MAE 0.26 deg Brier 0.000 | phase-blind R2 0.870 MAE 0.76 deg Brier 0.000
+
+C1 ABSOLUTE ACCURACY in context (all events x options): |tilt_pred - tilt_meas|
+   MAE 2.09 deg, median 1.82, bias (pred - meas) -1.79; R2 -0.99  (measured tilt range 1.3-11.3 deg)
+   phase-blind map (mean over phase): R2 -1.01, MAE 2.10 deg
+   within-event (phase effect only): R2 -0.00; measured spread across the 9 waits median 0.88 deg, predicted spread median 0.29 deg
+
+C2 RANKING (what the commander uses): Spearman rho between predicted cost and measured tilt over the 9 waits, per event
+   median rho +0.27; rho > 0 in 61% of events; mean +0.18
+
+C3 DECISION VALUE (measured tilt, deg; paired over events; mean [95% CI], sign-flip p)
+   map-best 4.87 | random wait 5.08 | release now 5.11 | map-worst 5.24 | oracle 4.48
+   map-best - random            -0.21 [-0.27, -0.15]  p 0.0000
+   map-best - now               -0.24 [-0.33, -0.17]  p 0.0000
+   map-best - map-worst         -0.37 [-0.47, -0.27]  p 0.0000
+   map-best - oracle (regret)   +0.39 [+0.34, +0.44]  p 0.0000
+   share of the achievable gain (random -> oracle) captured by the map: 35%
+
+C4 LARGE-TILT / FALL STAND-IN: options with peak tilt > 15 deg: 0.0%; falls in replays: 0 of 4392 (predicted fall prob. mean 0.000)
+
+C5 BY CONTEXT (where does the map stop being useful?)
+   stratum                               n   MAE    R2   rho best-rand         [95% CI]
+   all                                 488  2.09 -0.99 +0.27     -0.21 [ -0.27,  -0.15]
+   in map domain = True                 10  0.84 -0.40 +0.62     -0.19 [ -0.41,  +0.02]
+   in map domain = False               478  2.11 -1.00 +0.26     -0.21 [ -0.27,  -0.15]
+   settled                             307  1.91 -0.79 +0.28     -0.22 [ -0.30,  -0.15]
+   not settled                         181  2.38 -1.62 +0.23     -0.19 [ -0.28,  -0.10]
+   prev. release < 0.36 s ago          449  2.15 -1.17 +0.22     -0.14 [ -0.20,  -0.09]
+   prev. release >= 0.36 s ago          39  1.33  0.40 +0.88     -0.95 [ -1.25,  -0.67]
+   combined planar + yaw change        181  1.53 -0.09 +0.41     -0.40 [ -0.52,  -0.29]
+   single-axis change                  307  2.41 -1.96 +0.23     -0.09 [ -0.15,  -0.04]
+   speed 0.0-0.2 m/s                    78  1.67 -0.06 +0.65     -0.55 [ -0.74,  -0.37]
+   speed 0.2-0.4 m/s                   158  1.71 -0.62 +0.24     -0.24 [ -0.35,  -0.15]
+   speed >= 0.4 m/s                    252  2.45 -1.84 +0.20     -0.08 [ -0.15,  -0.01]
+   change size 0.2-0.3                 387  2.17 -1.43 +0.19     -0.12 [ -0.17,  -0.07]
+   change size 0.3-0.5                  64  1.71 -0.11 +0.55     -0.32 [ -0.51,  -0.15]
+   change size >= 0.5                   37  1.80 -0.07 +0.88     -0.97 [ -1.29,  -0.65]
+   scenario formation6_gate            102  1.93 -0.58 +0.23     -0.19 [ -0.31,  -0.07]
+   scenario formation9_pillars         150  1.83 -1.15 +0.28     -0.19 [ -0.28,  -0.11]
+   scenario swap16                     150  2.43 -1.96 +0.29     -0.26 [ -0.38,  -0.15]
+   scenario swap8                       86  2.12 -0.81 +0.24     -0.18 [ -0.34,  -0.02]
+
+Reading: the map supports phase timing in context if rho is clearly > 0 and map-best < random (CI below 0). If
+map-best ~ random, the swarm-level gain comes from the delay/shaping, not from the phase choice.

@@ -5,6 +5,9 @@
   scaling    16 and 32 robots (swap16, swap32, formation16_pillars), 3 configs, 10 seeds
   obstacles  obstacle scenarios again WITH static-obstacle safety (0.1 m margin, tau_obs 2 s,
              urgent if TTC to an obstacle < 1.5 s) for every config, 15 seeds
+  timing     controls for the timing claim on the main scenarios, 20 seeds: the full system against
+             the same system releasing after a RANDOM wait from the same window (sham timing) and at
+             the map's WORST phase (analyse with scripts/timing_controls.py)
 
 Run:  python scripts/paper_runs.py --quick                 (~10-15 min, 2 seeds, small scaling)
       python scripts/paper_runs.py                         (all suites; long - overnight)
@@ -13,6 +16,7 @@ Run:  python scripts/paper_runs.py --quick                 (~10-15 min, 2 seeds,
       python scripts/paper_runs.py --suites obstacles --turn-gate   (+ body-command envelope)
       python scripts/paper_runs.py --suites main,lookahead,scaling --robust   (FINAL paper runs; --robust already
                                                                  includes the static safety of 'obstacles')
+      python scripts/paper_runs.py --suites timing --robust   (sham / worst-phase controls)
       python scripts/paper_runs.py --analyse-only          (re-make summaries + stats)
 Out:  results/paper/<suite>/swarm_eval.csv, swarm_summary.txt, swarm_stats.txt, swarm_paths_*.png
 """
@@ -54,6 +58,13 @@ SUITES = {
         scenarios=["formation9_pillars", "formation6_gate", "formation16_pillars"],
         configs=[BASE, "predictive:limiter:q", "predictive:phase+limiter:q", "predictive:phase+gaslc_equal:q"],
         seeds=15, quick_seeds=1, quick_scenarios=["formation6_gate"], job=SE.STATIC_SAFETY),
+    "timing": dict(
+        scenarios=["swap4", "swap8", "formation9_pillars", "formation6_gate"],
+        configs=[BASE,
+                 "predictive:phase+gaslc_equal:q",       # full system: release at the map's best phase
+                 "predictive:sham+gaslc_equal:q",        # control: random wait from the same window
+                 "predictive:worst+gaslc_equal:q"],      # control: release at the map's worst phase
+        seeds=20, quick_seeds=2),
 }
 
 

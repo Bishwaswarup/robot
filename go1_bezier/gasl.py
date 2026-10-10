@@ -85,12 +85,17 @@ def parse_strategy(strategy):
          limiter*1.4             uniform limiter scaled 1.4x
          gasl_fast, gasl_equal   push-envelope shaped
          gaslc_equal, gaslc_x1.4 step-sensitivity (capability map) shaped, mean scale 1 / 1.4
+         phase+gaslc_equal       timing at the map's best phase + shaped limiter (the full system)
+         sham+gaslc_equal        control: random wait from the same window + shaped limiter
+         worst+gaslc_equal       control: timing at the map's WORST phase + shaped limiter
          ...@0.125               phase lead (fraction of a gait period)
     Returns GaitAwareLimiter kwargs, or None for the commander's own strategies."""
     base, _, lead = strategy.partition("@")
     lead = float(lead) if lead else 0.0
-    if base.startswith("phase+gaslc_"):                  # timing + shaped limiter
-        return dict(mode=base.split("_", 1)[1], source="cmd", phase_lead=lead, _commander="phase+limiter")
+    for rule, pre in (("best", "phase+gaslc_"), ("random", "sham+gaslc_"), ("worst", "worst+gaslc_")):
+        if base.startswith(pre):                         # timing + shaped limiter (sham/worst: controls)
+            return dict(mode=base.split("_", 1)[1], source="cmd", phase_lead=lead, _commander="phase+limiter",
+                        _rule=rule)
     if base.startswith("limiter*"):
         return dict(mode="uniform", uniform=float(base.split("*")[1]))
     if base.startswith("gaslc_"):
@@ -100,14 +105,18 @@ def parse_strategy(strategy):
     return None
 
 
-def make_commander(ctrl, strategy, cmap, envelope, cache=None):
-    """PhaseAwareCommander for any strategy name (limiter families get a cached limiter)."""
+def make_commander(ctrl, strategy, cmap, envelope, cache=None, rng=None):
+    """PhaseAwareCommander for any strategy name (limiter families get a cached limiter).
+    rng: random generator for the sham (random-wait) control."""
     from .commander import PhaseAwareCommander
     kw = parse_strategy(strategy)
     if kw is None:
         return PhaseAwareCommander(ctrl, cmap, strategy, envelope=envelope)
     cache = {} if cache is None else cache
     com_strategy = kw.pop("_commander", "gasl_fast")
-    if strategy not in cache:
-        cache[strategy] = GaitAwareLimiter(envelope, cmap=cmap, **kw)
-    return PhaseAwareCommander(ctrl, cmap, com_strategy, envelope=envelope, gasl=cache[strategy])
+    rule = kw.pop("_rule", "best")
+    ckey = strategy.replace("sham+", "phase+").replace("worst+", "phase+")   # same limiter for all rules
+    if ckey not in cache:
+        cache[ckey] = GaitAwareLimiter(envelope, cmap=cmap, **kw)
+    return PhaseAwareCommander(ctrl, cmap, com_strategy, envelope=envelope, gasl=cache[ckey],
+                               release_rule=rule, rng=rng)

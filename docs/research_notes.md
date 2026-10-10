@@ -542,3 +542,17 @@ docs/media/go1_trot.gif, go1_closeup.png, swarm_swap16.gif + _paths.png, swarm_g
 course_team6.gif + _paths.png (plain floor, one colour per robot trunk, dotted trunk trails).
 .gitignore now keeps docs/media/*.gif and the final results (results/paper/*_robust, paper_tables.md,
 primary_tests.csv, results/course, pilot/envelope/commander CSVs); rejected/older runs stay local.
+
+### Map validity in context + timing controls (2026-10-10, code ready, runs pending on the Mac)
+Reviewer-style concern: map calibrated on isolated settled steps (held-out R2 0.98 cmd_lim) but ~1% of swarm
+events are in-domain. NOTE: the full system (phase+limiter) times ALL non-urgent big changes with the map, also
+out-of-domain ones (paper Sec 4.2 "outside the map's domain are released at once" only holds for the grid range).
+- scripts/map_validation.py: snapshot full-system swarm at sampled timed events (deepcopy of MjData + controllers +
+  commanders), replay 9 candidate waits with all robots' logged command streams, measure focal peak tilt (1 s).
+  Replay of the commander's own choice reproduces the original run exactly (max |dq| = 0).
+  QUICK (24 events, 3 runs): in-domain 8%, prev. release < 1 period ago 88%; MAE 1.95 deg (bias -1.8, R2 < 0),
+  within-event R2 ~0, median rho +0.19, map-best - random -0.09 deg [-0.26, +0.06] n.s., map-best - now -0.33*.
+  -> early sign that the phase choice carries little information in context; full run decides.
+- commander release_rule best/random/worst; strategies sham+gaslc_equal, worst+gaslc_equal; suite 'timing'
+  (paper_runs --suites timing --robust, 320 runs) + scripts/timing_controls.py. Mean waits matched (~0.085-0.09 s).
+  Full system reproduces main_robust exactly; baseline shows cross-machine float drift in 3/8 runs (cloud vs Mac).
