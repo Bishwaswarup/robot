@@ -23,19 +23,19 @@
 
 \abstract{Multi-robot collision avoidance treats each robot as a point that can change velocity at any
 instant. A trotting quadruped cannot: how well it absorbs a change of commanded velocity depends on where
-in the gait cycle the change arrives. We measure this dependence for a B\'ezier-curve trot controller on a
+in the gait cycle the change arrives. We measure this dependence for a B\'ezier trot controller on a
 simulated Unitree Go1 and build a decentralized swarm layer around it. Each robot solves reciprocal
 collision avoidance (ORCA) one gait period ahead, holds each non-urgent velocity change for at most half a
 gait period, releases it at the phase a capability map predicts is least destabilizing, and shapes it with
-a gait-aware slew limiter; urgent conflicts bypass the hold. In MuJoCo, with 6 to 32 robots in crowded or
-obstructed scenarios, the full system reduced urgent avoidance events by 22--39\% and 99th-percentile body
+a gait-aware slew limiter; urgent conflicts bypass the hold. In MuJoCo, in crowded or obstructed scenarios
+with 6, 9, 16 and 32 robots, the full system reduced urgent avoidance events by 22--39\% and 99th-percentile body
 tilt by 19--24\% relative to a reactive baseline (paired by seed, Holm-corrected). It had no falls in 230
-runs; the baseline fell twice in 170 runs. A control that releases after a random wait of the same length
+runs, against two in 170 baseline runs, and fewer robot contacts, though not none. A control that releases after a random wait of the same length
 shows that prediction and the bounded hold produce the reduction in urgent events, while the phase choice
 adds a further 4--6\% reduction in tilt. Replaying 488 recorded swarm events at nine release times shows
 that the map's phase ranking, accurate for isolated steps, transfers only partly to the rapid command
-sequences of a swarm. With four robots the method increases urgent events, and in an eight-robot swap it
-does not change them.}
+sequences of a swarm. With four robots the method increases urgent events; with eight it does not
+significantly change them.}
 
 \keywords{Legged robots, Multi-robot systems, Collision avoidance, Gait phase, Quadruped swarms, ORCA}
 
@@ -110,8 +110,9 @@ Velocity commands to legged controllers are commonly rate-limited, and learned c
 curricula of command changes. A recent example schedules commands by the robot's current velocity to
 extend its top speed \cite{tao2026speed}; the aim there is the locomotion envelope of one robot. Our
 question differs in purpose: we choose \emph{when} a navigation-layer velocity change, issued for
-collision avoidance in a team, reaches the locomotion controller. To our knowledge, no prior work
-schedules multi-robot navigation commands by gait phase.
+collision avoidance in a team, reaches the locomotion controller. To our knowledge, current multi-robot
+navigation approaches do not explicitly schedule the release of navigation-layer commands according to
+the gait phase of the receiving legged robot.
 
 \begin{table}[t]
   \centering
@@ -123,7 +124,7 @@ schedules multi-robot navigation commands by gait phase.
     Area & What it addresses & What this paper adds \\
     \midrule
     Reciprocal collision avoidance \cite{vandenberg2011orca,vandenberg2011avo,alonsomora2013nhorca}
-      & Decentralized collision-free velocity selection under constant platform limits
+      & Decentralized velocity selection for collision avoidance under constant platform limits
       & Plans one gait period ahead and holds non-urgent changes, releasing them by gait phase \\
     Gait robustness and step timing \cite{pratt2006capture,khadiv2016step,chen2022capturability}
       & Phase-dependent balance and recovery of one robot
@@ -375,10 +376,13 @@ baseline (7 scenarios $\times$ 3 metrics). (B) Twelve tests compare prediction w
 prediction alone on the four main scenarios. (C) The timing controls compare the full system with its
 random-wait and worst-phase versions. With $n = 10$ seeds the smallest possible raw $p$-value is
 $2/2^{10} \approx 0.00195$; Holm multiplies the $k$-th smallest of the 21 primary $p$-values by $22-k$, so
-a 10-seed test ranked first could at best reach $21 \times 0.00195 \approx 0.041$. In our data the 20-seed
-tests rank first and the six significant 10-seed tests rank 10th to 15th, giving a corrected $p$ of
-$12 \times 0.00195 \approx 0.023$ (Table~\ref{tab:primary}). The scaling suite can therefore reach the 5\%
-level but not the 1\% level.
+a 10-seed test ranked first could at best reach $21 \times 0.00195 \approx 0.041$, below 0.05 but never
+below 0.01. Holm is a step-down procedure: the adjusted value of the $k$-th test is the largest of
+$(22-j)\,p_{(j)}$ over $j \le k$, capped at 1. In our data nine of the twelve 20-seed tests have smaller
+$p$-values than any 10-seed test, so the six significant 10-seed tests, tied at $p = 2/2^{10}$, occupy ranks
+10 to 15 and all receive the adjusted value $12 \times 0.00195 \approx 0.023$ of the first of them.
+Table~\ref{tab:holm} in the appendix lists all 21 raw and adjusted $p$-values in order. The scaling suite
+can therefore reach the 5\% level but not the 1\% level.
 
 \section{Results}\label{sec:results}
 
@@ -633,7 +637,8 @@ scenarios. (vii) Falls were too rare to test the map's fall-risk predictions in 
 A quadruped's tolerance of a velocity change depends on where in the gait cycle the change arrives. A swarm
 layer that plans ORCA one gait period ahead, holds each non-urgent change for at most half a period and
 releases it at the predicted best phase cut urgent avoidance events by 22--39\% and 99th-percentile tilt by
-19--24\% against a reactive baseline in crowded and obstructed scenarios with 6 to 32 simulated Go1 robots,
+19--24\% against a reactive baseline in crowded and obstructed scenarios with 6, 9, 16 and 32 simulated
+Go1 robots,
 with no falls in 230 runs against two in 170 for the baseline. Controls show that planning ahead and the
 bounded hold account for the reduction in urgent events, and that the phase choice adds a smaller, consistent
 reduction in tilt. A capability map measured on isolated steps keeps only part of its phase ranking in the rapid
@@ -673,6 +678,49 @@ manuscript.
 
 \bmhead{Ethics approval and consent to participate}
 Not applicable.
+
+\begin{appendices}
+
+\section{Holm correction of the primary tests}\label{app:holm}
+
+\begin{table}[h]
+  \centering
+  \caption{All 21 primary tests (full system against the reactive baseline) in order of raw $p$-value, with
+  the Holm multiplier $22-k$ and the adjusted $p$-value (the running maximum of $(22-j)\,p_{(j)}$, $j \le k$).
+  Ranks 1--15 are significant at 0.05; the changes at ranks 7 and 8 (4-robot swap) favour the baseline.
+  Ties are ordered arbitrarily; tied tests receive the same adjusted value.}
+  \label{tab:holm}
+  \footnotesize
+  \begin{tabular}{@{}rlrrlrrrr@{}}
+    \toprule
+    $k$ & Scenario & $N$ & Seeds & Metric & Change & Raw $p$ & $22-k$ & Holm $p$ \\
+    \midrule
+    1 & Pillars & 9 & 20 & Urgent events & $-$30\% & $1.9\times10^{-6}$ & 21 & $4.0\times10^{-5}$ \\
+    2 & Pillars & 9 & 20 & p99 tilt & $-$19\% & $1.9\times10^{-6}$ & 20 & $4.0\times10^{-5}$ \\
+    3 & Gate & 6 & 20 & Closest distance & +7\% & $3.8\times10^{-6}$ & 19 & $7.2\times10^{-5}$ \\
+    4 & Gate & 6 & 20 & p99 tilt & $-$21\% & $5.7\times10^{-6}$ & 18 & $1.0\times10^{-4}$ \\
+    5 & Gate & 6 & 20 & Urgent events & $-$34\% & $7.1\times10^{-5}$ & 17 & 0.00120 \\
+    6 & Pillars & 9 & 20 & Closest distance & +8\% & $3.4\times10^{-4}$ & 16 & 0.00543 \\
+    7 & Swap & 4 & 20 & Closest distance & $-$2\% & $4.0\times10^{-4}$ & 15 & 0.00601 \\
+    8 & Swap & 4 & 20 & Urgent events & +109\% & $5.0\times10^{-4}$ & 14 & 0.00702 \\
+    9 & Swap & 8 & 20 & p99 tilt & $-$11\% & $7.7\times10^{-4}$ & 13 & 0.00999 \\
+    10 & Swap & 16 & 10 & Urgent events & $-$28\% & 0.00195 & 12 & 0.0234 \\
+    11 & Swap & 16 & 10 & p99 tilt & $-$24\% & 0.00195 & 11 & 0.0234 \\
+    12 & Swap & 32 & 10 & Urgent events & $-$22\% & 0.00195 & 10 & 0.0234 \\
+    13 & Swap & 32 & 10 & p99 tilt & $-$19\% & 0.00195 & 9 & 0.0234 \\
+    14 & Pillars & 16 & 10 & Urgent events & $-$39\% & 0.00195 & 8 & 0.0234 \\
+    15 & Pillars & 16 & 10 & p99 tilt & $-$22\% & 0.00195 & 7 & 0.0234 \\
+    16 & Swap & 16 & 10 & Closest distance & +6\% & 0.0176 & 6 & 0.105 \\
+    17 & Swap & 4 & 20 & p99 tilt & $-$10\% & 0.0200 & 5 & 0.105 \\
+    18 & Pillars & 16 & 10 & Closest distance & +4\% & 0.0566 & 4 & 0.227 \\
+    19 & Swap & 32 & 10 & Closest distance & +2\% & 0.293 & 3 & 0.879 \\
+    20 & Swap & 8 & 20 & Urgent events & $-$5\% & 0.306 & 2 & 0.879 \\
+    21 & Swap & 8 & 20 & Closest distance & +0\% & 0.895 & 1 & 0.895 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\end{appendices}
 
 \bibliography{refs}
 
