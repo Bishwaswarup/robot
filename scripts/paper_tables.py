@@ -9,6 +9,7 @@ Out:  results/paper/paper_tables.md, results/paper/primary_tests.csv
 import os
 import sys
 import argparse
+import itertools
 import numpy as np
 import pandas as pd
 
@@ -21,15 +22,28 @@ PRIMARY = [("urgent_per_robot_min", "urgent events / robot-min", -1),
 ORDER = ["swap4", "swap8", "swap16", "swap32", "formation9_pillars", "formation6_gate", "formation16_pillars"]
 
 
-def signflip_p(x, n_perm=20000, seed=0):
+def signflip_p(x, n_perm=20000, seed=0, max_exact=22):
+    """Two-sided paired sign-flip permutation p-value for the mean difference.
+
+    Exact (all 2^n sign patterns) for n <= max_exact, which covers every test in the paper (10 or 20
+    seeds); otherwise Monte Carlo with the observed pattern counted, p = (b + 1) / (n_perm + 1).
+    Zero differences are kept: flipping them changes nothing, so the result equals the test on the
+    non-zero differences. Ties with the observed |sum| count as at least as extreme (conservative).
+    With n non-zero differences the smallest attainable p is 2 / 2^n (two-sided)."""
     x = np.asarray(x, float)
     if np.allclose(x, 0):
         return 1.0
-    if len(x) <= 16:                                   # exact
-        signs = np.array(np.meshgrid(*[[-1, 1]] * len(x))).reshape(len(x), -1).T
-    else:
-        signs = np.random.default_rng(seed).choice([-1, 1], size=(n_perm, len(x)))
-    return float((np.abs((signs * x).mean(1)) >= abs(x.mean()) - 1e-12).mean())
+    obs, tol = abs(x.sum()), 1e-9 * max(1.0, abs(x).sum())
+    n = len(x)
+    if n <= max_exact:
+        k = min(n, 16)                                 # enumerate 2^k at once, loop over the rest
+        lo = np.array(np.meshgrid(*[[-1.0, 1.0]] * k)).reshape(k, -1).T @ x[n - k:]
+        hits = 0
+        for hs in itertools.product([-1.0, 1.0], repeat=n - k):
+            hits += int(np.sum(np.abs(lo + np.dot(hs, x[:n - k])) >= obs - tol))
+        return hits / 2.0 ** n
+    signs = np.random.default_rng(seed).choice([-1.0, 1.0], size=(n_perm, n))
+    return float((1 + np.sum(np.abs(signs @ x) >= obs - tol)) / (n_perm + 1))
 
 
 def holm(p):
@@ -70,7 +84,7 @@ def main():
     t.to_csv(os.path.join(P, "primary_tests.csv"), index=False)
 
     L = ["# Paper tables (full system vs baseline)", "",
-         f"Full = `{FULL}`, baseline = `{BASE}`; paired by seed; sign-flip permutation p; "
+         f"Full = `{FULL}`, baseline = `{BASE}`; paired by seed; exact two-sided sign-flip permutation p; "
          f"Holm over all {len(t)} primary tests.", "",
          "| scenario | robots | seeds | metric | baseline | full | change | p (Holm) |",
          "|---|---|---|---|---|---|---|---|"]

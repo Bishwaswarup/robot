@@ -43,24 +43,7 @@ def save(fig, out, name):
     print("wrote", os.path.join(out, name + ".pdf"))
 
 
-def signflip_p(x):
-    x = np.asarray(x, float)
-    if np.allclose(x, 0):
-        return 1.0
-    if len(x) <= 16:
-        s = np.array(np.meshgrid(*[[-1, 1]] * len(x))).reshape(len(x), -1).T
-    else:
-        s = np.random.default_rng(0).choice([-1, 1], size=(20000, len(x)))
-    return float((np.abs((s * x).mean(1)) >= abs(x.mean()) - 1e-12).mean())
-
-
-def holm(p):
-    p = np.asarray(p, float)
-    o, m, out, run = np.argsort(p), len(p), np.empty(len(p)), 0.0
-    for k, i in enumerate(o):
-        run = max(run, (m - k) * p[i])
-        out[i] = min(1.0, run)
-    return out
+from paper_tables import signflip_p, holm      # one implementation for tables and figures
 
 
 def paired(d, sc, cfg, col):

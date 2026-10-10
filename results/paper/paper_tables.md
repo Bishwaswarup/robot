@@ -1,15 +1,15 @@
 # Paper tables (full system vs baseline)
 
-Full = `predictive:phase+gaslc_equal:q`, baseline = `reactive:limiter`; paired by seed; sign-flip permutation p; Holm over all 21 primary tests.
+Full = `predictive:phase+gaslc_equal:q`, baseline = `reactive:limiter`; paired by seed; exact two-sided sign-flip permutation p; Holm over all 21 primary tests.
 
 | scenario | robots | seeds | metric | baseline | full | change | p (Holm) |
 |---|---|---|---|---|---|---|---|
-| swap4 | 4 | 20 | urgent events / robot-min | 5.21 | 10.9 | +109% (worse) | 0.0056** |
+| swap4 | 4 | 20 | urgent events / robot-min | 5.21 | 10.9 | +109% (worse) | 0.0070** |
 | swap4 | 4 | 20 | p99 tilt (deg) | 5.9 | 5.3 | -10%  | 0.1055 |
-| swap4 | 4 | 20 | closest robot distance (m) | 0.744 | 0.727 | -2% (worse) | 0.0056** |
+| swap4 | 4 | 20 | closest robot distance (m) | 0.744 | 0.727 | -2% (worse) | 0.0060** |
 | swap8 | 8 | 20 | urgent events / robot-min | 29.6 | 28 | -5%  | 0.8789 |
-| swap8 | 8 | 20 | p99 tilt (deg) | 7.37 | 6.54 | -11%  | 0.0091** |
-| swap8 | 8 | 20 | closest robot distance (m) | 0.626 | 0.628 | +0%  | 0.8929 |
+| swap8 | 8 | 20 | p99 tilt (deg) | 7.37 | 6.54 | -11%  | 0.0100** |
+| swap8 | 8 | 20 | closest robot distance (m) | 0.626 | 0.628 | +0%  | 0.8951 |
 | swap16 | 16 | 10 | urgent events / robot-min | 54.1 | 39.2 | -28%  | 0.0234* |
 | swap16 | 16 | 10 | p99 tilt (deg) | 8.51 | 6.46 | -24%  | 0.0234* |
 | swap16 | 16 | 10 | closest robot distance (m) | 0.6 | 0.637 | +6%  | 0.1055 |
@@ -18,10 +18,10 @@ Full = `predictive:phase+gaslc_equal:q`, baseline = `reactive:limiter`; paired b
 | swap32 | 32 | 10 | closest robot distance (m) | 0.566 | 0.578 | +2%  | 0.8789 |
 | formation9_pillars | 9 | 20 | urgent events / robot-min | 40.4 | 28.4 | -30%  | 0.0000** |
 | formation9_pillars | 9 | 20 | p99 tilt (deg) | 7.14 | 5.76 | -19%  | 0.0000** |
-| formation9_pillars | 9 | 20 | closest robot distance (m) | 0.604 | 0.651 | +8%  | 0.0056** |
-| formation6_gate | 6 | 20 | urgent events / robot-min | 24.4 | 16.2 | -34%  | 0.0017** |
-| formation6_gate | 6 | 20 | p99 tilt (deg) | 5.84 | 4.62 | -21%  | 0.0000** |
-| formation6_gate | 6 | 20 | closest robot distance (m) | 0.661 | 0.707 | +7%  | 0.0000** |
+| formation9_pillars | 9 | 20 | closest robot distance (m) | 0.604 | 0.651 | +8%  | 0.0054** |
+| formation6_gate | 6 | 20 | urgent events / robot-min | 24.4 | 16.2 | -34%  | 0.0012** |
+| formation6_gate | 6 | 20 | p99 tilt (deg) | 5.84 | 4.62 | -21%  | 0.0001** |
+| formation6_gate | 6 | 20 | closest robot distance (m) | 0.661 | 0.707 | +7%  | 0.0001** |
 | formation16_pillars | 16 | 10 | urgent events / robot-min | 42 | 25.7 | -39%  | 0.0234* |
 | formation16_pillars | 16 | 10 | p99 tilt (deg) | 7.22 | 5.62 | -22%  | 0.0234* |
 | formation16_pillars | 16 | 10 | closest robot distance (m) | 0.593 | 0.617 | +4%  | 0.2266 |
