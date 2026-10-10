@@ -524,3 +524,21 @@ FINAL numbers (scripts/paper_tables.py -> results/paper/paper_tables.md): Holm o
 15 significant, 13 favour the full system; the 2 against are swap4 (sparse: urgent +109%, min dist -2%).
 Falls: full system 0 in all suites; baseline 1 (pillars16). Not finished: 1 (reactive:q pillars9),
 2 (pred:limiter:q pillars16), course full 1/20. Exact sign-flip with 10 seeds -> min Holm p 0.023.
+
+### Paper draft (2026-10-10)
+Draft preprint as a Claude Doc: https://claude.ai/code/artifact/3f50ab0b-766b-4edf-b459-7683c6cf6483
+Target: Springer journal with "In Review" (auto Research Square preprint) - Journal of Intelligent & Robotic
+Systems now; Autonomous Robots if hardware is added. arXiv dropped (endorsement hold). Numbers in the draft
+come from the final --robust v1 runs (results/paper/{main,lookahead,scaling}_robust, results/course).
+Venue changed: JIRS dropped (fully OA, APC EUR 2,590, no IISc deal); Autonomous Robots wants hardware.
+Final target: International Journal of Intelligent Robotics and Applications (IJIRA, Springer, hybrid,
+free subscription route, In Review). LaTeX source in paper/ (main.tex article, main_sn.tex sn-jnl).
+
+### Public release (2026-10-10)
+Repo github.com/Bishwaswarup/robot is public (MIT). Data availability in paper + doc changed to "publicly
+available". New README (results, gallery, paper figures, reproduce table), CITATION.cff (validated with
+cffconvert). Media by scripts/make_media.py (offscreen; on_step hooks in swarm_eval.run / course_eval.run):
+docs/media/go1_trot.gif, go1_closeup.png, swarm_swap16.gif + _paths.png, swarm_gate.gif + _paths.png,
+course_team6.gif + _paths.png (plain floor, one colour per robot trunk, dotted trunk trails).
+.gitignore now keeps docs/media/*.gif and the final results (results/paper/*_robust, paper_tables.md,
+primary_tests.csv, results/course, pilot/envelope/commander CSVs); rejected/older runs stay local.

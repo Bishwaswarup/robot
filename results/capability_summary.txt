@@ -1,0 +1,49 @@
+1) TROT MIRROR SYMMETRY (peak tilt, cell means)
+   mirror (theta -> -theta, phi -> phi+0.5): r = 0.993, mean |diff| = 0.55 deg
+   control (phi -> phi+0.5 only):            r = 0.853, mean |diff| = 3.73 deg
+
+2) MAP BUILT from 10752 trials -> data/capability_map_bezier.npz
+
+3) VALIDATION  (tilt: R2 / mean abs error on survivors; falls: Brier score, lower = better)
+   held-out repeat, cmd_lim: phase-aware R2 0.983 MAE 0.26 deg Brier 0.000 | phase-blind R2 0.870 MAE 0.76 deg Brier 0.000
+   held-out repeat, cmd_raw: phase-aware R2 0.937 MAE 0.43 deg Brier 0.000 | phase-blind R2 0.702 MAE 1.52 deg Brier 0.000
+   held-out repeat, push   : phase-aware R2 0.970 MAE 0.60 deg Brier 0.012 | phase-blind R2 0.714 MAE 3.18 deg Brier 0.073
+   held-out phases (map from 8 phases, predict the 8 in between), cmd_lim: R2 0.977 MAE 0.28 deg Brier 0.000
+   held-out phases (map from 8 phases, predict the 8 in between), cmd_raw: R2 0.906 MAE 0.58 deg Brier 0.000
+   held-out phases (map from 8 phases, predict the 8 in between), push   : R2 0.877 MAE 1.47 deg Brier 0.038
+
+4) PHASE-AWARE COMMAND TIMING  (cross-validated; mean over directions, sizes and the
+   phase at which the command change is requested)
+   settle = wait for the chosen phase + recovery time
+
+   v0 = 0.0 m/s, all sizes
+   strategy                           mean tilt  p90 tilt   settle  mean wait
+   no limiter, release now               6.95°   12.63°   0.95 s   0.000 s
+   no limiter, wait <= 1/4 cycle         5.64°   10.38°   0.92 s   0.045 s
+   no limiter, wait <= 1/2 cycle         4.85°    8.91°   0.91 s   0.085 s
+   slew limiter, release now             5.48°    9.76°   0.97 s   0.000 s
+   slew limiter, wait <= 1/2 cycle       4.48°    8.10°   0.98 s   0.089 s
+
+   v0 = 0.0 m/s, large (0.6-0.8 m/s)
+   strategy                           mean tilt  p90 tilt   settle  mean wait
+   no limiter, release now               8.83°   15.28°   1.21 s   0.000 s
+   no limiter, wait <= 1/4 cycle         6.96°   12.22°   1.16 s   0.045 s
+   no limiter, wait <= 1/2 cycle         5.83°    9.85°   1.13 s   0.086 s
+   slew limiter, release now             6.46°   10.15°   1.21 s   0.000 s
+   slew limiter, wait <= 1/2 cycle       5.33°    8.31°   1.20 s   0.092 s
+
+   v0 = 0.4 m/s, all sizes
+   strategy                           mean tilt  p90 tilt   settle  mean wait
+   no limiter, release now               7.01°   12.18°   0.91 s   0.000 s
+   no limiter, wait <= 1/4 cycle         5.60°    9.77°   0.87 s   0.044 s
+   no limiter, wait <= 1/2 cycle         4.95°    8.53°   0.86 s   0.087 s
+   slew limiter, release now             5.42°    9.12°   0.93 s   0.000 s
+   slew limiter, wait <= 1/2 cycle       4.52°    7.28°   0.96 s   0.090 s
+
+   v0 = 0.4 m/s, large (0.6-0.8 m/s)
+   strategy                           mean tilt  p90 tilt   settle  mean wait
+   no limiter, release now               8.88°   15.42°   1.13 s   0.000 s
+   no limiter, wait <= 1/4 cycle         6.78°   11.40°   1.05 s   0.041 s
+   no limiter, wait <= 1/2 cycle         5.89°    9.37°   1.02 s   0.085 s
+   slew limiter, release now             6.30°    9.92°   1.14 s   0.000 s
+   slew limiter, wait <= 1/2 cycle       5.27°    7.84°   1.17 s   0.088 s

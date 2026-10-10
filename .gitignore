@@ -11,11 +11,24 @@ __pycache__/
 # external robot models (clone separately, see README)
 mujoco_menagerie
 
-# generated outputs
-results/
+# generated outputs (the final paper results are kept, see below)
+results/*
 Claude outputs/
 *.mp4
 *.gif
+
+# keep: README media and the raw results behind every paper table/figure
+!docs/media/*.gif
+!results/paper/
+results/paper/*
+!results/paper/*_robust/
+!results/paper/paper_tables.md
+!results/paper/primary_tests.csv
+!results/course/
+!results/pilot_phase.csv
+!results/push_envelope.csv
+!results/commander_eval.csv
+!results/*_summary.txt
 MUJOCO_LOG.TXT
 
 # OS / editor

@@ -89,7 +89,8 @@ ROBUST = dict(STATIC_SAFETY, turn_gate=1, escape=1)    # + body-command envelope
 # (escape=2 and lag_priority=1 were tried on top and REJECTED: more timeouts - see research notes)
 
 
-def run(job):
+def run(job, on_step=None):
+    """on_step(m, d, k) is called after every physics step (media rendering); return False to stop."""
     layer, strategy, queue = parse_config(job["config"])
     job = dict(job, strategy=strategy)
     look = parse_lookahead(job["config"], job.get("lookahead", 0.36))
@@ -97,7 +98,7 @@ def run(job):
     rng = np.random.default_rng(job["seed"])
     starts = [(x + rng.normal(0, 0.05), y + rng.normal(0, 0.05), yaw) for x, y, yaw in sc["starts"]]
     spec = add_obstacles(make_arena(), sc["obstacles"])
-    m, d = load_team(starts, spec=spec, visual_meshes=False)
+    m, d = load_team(starts, spec=spec, visual_meshes=on_step is not None)
     N, dt = len(starts), m.opt.timestep
     cmap = CapabilityMap.load(MAP)
     ctrls = [Go1BezierController(m, d, prefix=f"go1_{i}/") for i in range(N)]
@@ -244,6 +245,8 @@ def run(job):
             else:
                 ctrls[i].step()
         mujoco.mj_step(m, d)
+        if on_step is not None and on_step(m, d, k) is False:
+            break
         newpos = np.array([d.xpos[b][:2] for b in trunk])
         vel = (1 - alpha) * vel + alpha * (newpos - pos) / dt
         for i in range(N):

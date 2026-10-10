@@ -1,0 +1,27 @@
+========================================================================================================================
+OBSTACLE COURSE  (pole slalom -> gate -> chicane -> 2 timed moving obstacles -> pillars; mean over seeds)
+========================================================================================================================
+
+team of 1
+  config                                 ok   time falls  r-r r-obs r-mov d robots clr obs clr mov   p99   max  form   lag urg/min
+  reactive:limiter                     100%   118s     0  0.0   0.0   0.0     n/am   0.27m   0.50m  4.8°   12°  n/am 0.18m     7.4
+  predictive:limiter:q                 100%   118s     0  0.0   0.0   0.0     n/am   0.20m   0.48m  4.9°   12°  n/am 0.40m    11.6
+  predictive:phase+gaslc_equal:q       100%   118s     0  0.0   0.0   0.0     n/am   0.19m   0.48m  4.7°   12°  n/am 0.37m    10.4
+  section times (s, first robot in -> last robot out):
+    reactive:limiter                     slalom  21.0  gate   7.1  chicane  36.0  crossing  15.5  pillars  10.8  finish   3.3
+    predictive:limiter:q                 slalom  21.0  gate   7.1  chicane  36.0  crossing  15.5  pillars  13.5  finish   3.3
+    predictive:phase+gaslc_equal:q       slalom  21.0  gate   7.1  chicane  36.0  crossing  15.5  pillars  13.1  finish   3.3
+
+team of 6
+  config                                 ok   time falls  r-r r-obs r-mov d robots clr obs clr mov   p99   max  form   lag urg/min
+  reactive:limiter                     100%   129s     1  0.2   0.0   0.0    0.53m   0.23m   0.45m  7.9°   60° 0.55m 0.40m    33.9
+  predictive:limiter:q                 100%   129s     0  0.1   0.0   0.0    0.55m   0.15m   0.44m  7.4°   19° 0.62m 0.44m    30.7
+  predictive:phase+gaslc_equal:q        95%   129s     0  0.1   0.1   0.0    0.54m   0.18m   0.43m  6.7°   19° 0.72m 0.54m    29.2
+  section times (s, first robot in -> last robot out):
+    reactive:limiter                     slalom  31.9  gate  17.0  chicane  46.8  crossing  25.3  pillars  26.8  finish  18.8
+    predictive:limiter:q                 slalom  32.1  gate  17.3  chicane  46.9  crossing  25.3  pillars  27.8  finish  18.9
+    predictive:phase+gaslc_equal:q       slalom  32.8  gate  17.6  chicane  47.1  crossing  25.4  pillars  27.1  finish  18.3
+
+  r-r / r-obs / r-mov = contact onsets robot-robot / robot-static obstacle / robot-moving obstacle;
+  clr = smallest clearance (centre to obstacle surface; a robot is ~0.33 m wide at the hips);
+  form = mean distance robot to its slot; lag = how far robots trail their own slots along the path.

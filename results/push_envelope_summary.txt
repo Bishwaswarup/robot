@@ -1,0 +1,27 @@
+==============================================================================
+PUSH CAPABILITY ENVELOPE  (push = 0.1 s force; impulse = 0.1 x F N*s; robot ~12 kg)
+  fall: J_fall = largest force not causing a fall
+  safe: J_safe = largest force with no fall AND peak tilt <= 20 deg
+==============================================================================
+
+[fall]  1536 bisections; censored: 40 survive F_HI=320 N, 0 fail at F_LO=60 N
+  v0=0.0: J median   213 N  (range 125-320)  worst 125 N at dir 112.5, phi 0.438; best 320 N at dir 157.5, phi 0.000
+          phase swing per direction (max-min over phase): median 106 N, max 149 N | repeat-to-repeat std: median 1.9 N
+          gain if phase is known: mean J over phases / worst-phase J = 1.33x
+  v0=0.4: J median   220 N  (range 134-320)  worst 134 N at dir 90.0, phi 0.438; best 320 N at dir 22.5, phi 0.250
+          phase swing per direction (max-min over phase): median 121 N, max 169 N | repeat-to-repeat std: median 1.9 N
+          gain if phase is known: mean J over phases / worst-phase J = 1.33x
+  mirror symmetry (theta -> -theta, phi -> phi+0.5): r = 0.991, mean |diff| 4.2 N
+
+[safe]  1536 bisections; censored: 3 survive F_HI=320 N, 0 fail at F_LO=60 N
+  v0=0.0: J median   167 N  (range 101-292)  worst 101 N at dir 247.5, phi 0.938; best 292 N at dir 337.5, phi 0.688
+          phase swing per direction (max-min over phase): median 109 N, max 175 N | repeat-to-repeat std: median 1.9 N
+          gain if phase is known: mean J over phases / worst-phase J = 1.44x
+  v0=0.4: J median   167 N  (range 103-317)  worst 103 N at dir 292.5, phi 0.438; best 317 N at dir 337.5, phi 0.750
+          phase swing per direction (max-min over phase): median 84 N, max 200 N | repeat-to-repeat std: median 1.9 N
+          gain if phase is known: mean J over phases / worst-phase J = 1.38x
+  mirror symmetry (theta -> -theta, phi -> phi+0.5): r = 0.984, mean |diff| 3.7 N
+
+Agreement with pilot falls (pilot trial falls iff F > J_fall of its cell): 98.6% of 3072 pilot push trials
+
+saved data/push_envelope_bezier.npz

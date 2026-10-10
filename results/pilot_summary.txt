@@ -1,0 +1,67 @@
+==============================================================================
+PHASE DEPENDENCE  (eta2 = share of variance explained by gait phase;
+                   p from permutation test against run-to-run variation)
+==============================================================================
+
+1) IS IT BIG ENOUGH TO MATTER?  phase swing = worst-phase mean - best-phase mean
+group              cond  fall% phase-gated |     tilt swing |  recovery swing | excess-slip swing
+cmd  v0=0.0 raw      40   0.0%     0/40    |  3.28 deg   85% |   0.45 s   51% |   57.7 mm   26%
+cmd  v0=0.0 lim      40   0.0%     0/40    |  2.32 deg   39% |   0.32 s   22% |   21.6 mm   14%
+cmd  v0=0.4 raw      40   0.0%     0/40    |  3.60 deg   57% |   0.42 s   57% |   61.1 mm   56%
+cmd  v0=0.4 lim      40   0.0%     0/40    |  2.06 deg   37% |   0.34 s   30% |   30.0 mm   34%
+push v0=0.0 lim      32  24.5%    12/32    | 10.76 deg   78% |   0.48 s   40% |  121.6 mm   63%
+push v0=0.4 lim      32  23.4%    15/32    |  9.18 deg   70% |   0.55 s   42% |  179.6 mm   99%
+   (medians over conditions; % = swing relative to the condition's mean;
+    excess slip = foot sliding beyond what undisturbed walking produces in 2 s)
+   phase-gated = survives at some phases (<34% falls) but falls at others (>66%)
+
+2) IS THERE A PHASE EFFECT AT ALL?  eta2 = variance share explained by phase
+group              tilt eta2  p<.01 recov eta2  p<.01 slip eta2  p<.01
+cmd  v0=0.0 raw         0.97    95%       0.95    91%      0.95    95%
+cmd  v0=0.0 lim         0.97    92%       0.92    95%      0.87    98%
+cmd  v0=0.4 raw         0.88    88%       0.85    88%      0.84    95%
+cmd  v0=0.4 lim         0.85    72%       0.79    87%      0.75    92%
+push v0=0.0 lim         0.98    97%       0.92    83%      0.92    87%
+push v0=0.4 lim         0.96    84%       0.78    66%      0.91    72%
+
+Phase-gated conditions (survival depends on timing):
+  push v0=0.0 lim    dir    0 size   240  falls 0% at phi=0.062  vs 100% at phi=0.375
+  push v0=0.0 lim    dir  135 size   180  falls 0% at phi=0.000  vs 100% at phi=0.312
+  push v0=0.0 lim    dir  135 size   240  falls 0% at phi=0.688  vs 100% at phi=0.000
+  push v0=0.0 lim    dir  180 size   240  falls 0% at phi=0.000  vs 100% at phi=0.062
+  push v0=0.0 lim    dir  225 size   180  falls 0% at phi=0.000  vs 100% at phi=0.812
+  push v0=0.0 lim    dir  225 size   240  falls 0% at phi=0.188  vs 100% at phi=0.000
+  push v0=0.0 lim    dir  270 size   180  falls 0% at phi=0.125  vs 100% at phi=0.000
+  push v0=0.0 lim    dir  315 size   180  falls 0% at phi=0.000  vs 100% at phi=0.375
+  push v0=0.0 lim    dir  315 size   240  falls 0% at phi=0.625  vs 100% at phi=0.000
+  push v0=0.0 lim    dir   45 size   180  falls 0% at phi=0.000  vs 100% at phi=0.875
+  push v0=0.0 lim    dir   45 size   240  falls 0% at phi=0.125  vs 100% at phi=0.000
+  push v0=0.0 lim    dir   90 size   180  falls 0% at phi=0.125  vs 100% at phi=0.000
+  push v0=0.4 lim    dir    0 size   240  falls 0% at phi=0.125  vs 100% at phi=0.000
+  push v0=0.4 lim    dir  135 size   180  falls 0% at phi=0.000  vs 100% at phi=0.312
+  push v0=0.4 lim    dir  135 size   240  falls 0% at phi=0.625  vs 100% at phi=0.000
+  push v0=0.4 lim    dir  180 size   180  falls 0% at phi=0.000  vs 67% at phi=0.500
+  push v0=0.4 lim    dir  180 size   240  falls 0% at phi=0.312  vs 100% at phi=0.125
+  push v0=0.4 lim    dir  225 size   180  falls 0% at phi=0.000  vs 100% at phi=0.875
+  push v0=0.4 lim    dir  225 size   240  falls 0% at phi=0.125  vs 100% at phi=0.000
+  push v0=0.4 lim    dir  270 size   180  falls 0% at phi=0.125  vs 100% at phi=0.000
+
+Largest tilt swings (non-falling runs):
+  push v0=0.4 lim    dir   45 size   180  tilt swing 34.6 deg (158% of mean)  recovery swing 0.83 s
+  push v0=0.0 lim    dir  225 size   180  tilt swing 34.5 deg (154% of mean)  recovery swing 0.86 s
+  push v0=0.4 lim    dir   45 size   240  tilt swing 31.5 deg (152% of mean)  recovery swing 0.68 s
+  push v0=0.0 lim    dir  180 size   240  tilt swing 30.8 deg (75% of mean)  recovery swing 0.32 s
+  push v0=0.4 lim    dir  180 size   240  tilt swing 30.0 deg (77% of mean)  recovery swing 0.28 s
+  push v0=0.4 lim    dir  315 size   180  tilt swing 29.4 deg (143% of mean)  recovery swing 0.79 s
+  push v0=0.4 lim    dir  315 size   240  tilt swing 28.5 deg (144% of mean)  recovery swing 0.56 s
+  push v0=0.0 lim    dir  135 size   180  tilt swing 28.2 deg (132% of mean)  recovery swing 0.74 s
+  cmd  v0=0.4 raw    dir   45 size   0.6  tilt swing 25.1 deg (174% of mean)  recovery swing 1.20 s
+  cmd  v0=0.4 raw    dir  315 size   0.8  tilt swing 23.9 deg (154% of mean)  recovery swing 1.27 s
+
+Suggested reading (decide on section 1, not on p-values):
+  * STRONG: phase-gated falls in a good share of push/cmd conditions, or tilt /
+    recovery swings >~30% of the mean -> gait phase belongs in the swarm layer.
+  * WEAK:  no phase-gated falls and swings <~10-15% -> phase washes out; model
+    feasibility on speed/turn state (+ slew limits) only.
+  * in between: phase matters only near the limits -> keep it as a safety margin
+    term (e.g. shrink the feasible set at bad phases), not a headline variable.

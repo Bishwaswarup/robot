@@ -4,4 +4,6 @@ numpy>=1.24
 imageio>=2.30        # examples/record_video.py
 imageio-ffmpeg>=0.4  # examples/record_video.py
 pytest>=7            # tests/
-matplotlib>=3.7      # scripts/pilot_phase.py plots
+pillow>=9           # scripts/make_media.py (GIFs)
+matplotlib>=3.7      # plots, scripts/paper_figures.py
+pandas>=1.5          # scripts/paper_tables.py, paper_figures.py

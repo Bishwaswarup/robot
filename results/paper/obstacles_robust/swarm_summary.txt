@@ -1,0 +1,29 @@
+==============================================================================================================
+SWARM TEST  (ORCA + formation -> commander -> Bezier trot; mean over seeds)
+==============================================================================================================
+
+formation9_pillars
+  config                                 success    time falls robot-robot robot-obst min dist   tilt    p99    max | big/rob/min in-domain  urgent   wait | form err    lag arrive
+  reactive:limiter                          100%   44.6s     0         0.1        0.0    0.51m  1.75°   7.2°  16.2° |        73.7        1%     56% 0.000s |   0.533m  0.43m   nans
+  predictive:phase+limiter:q                100%   44.2s     0         0.0        0.1    0.60m  1.55°   5.8°  13.1° |        70.4        1%     39% 0.092s |   0.514m  0.37m   nans
+  predictive:phase+gaslc_equal:q            100%   47.3s     0         0.2        0.0    0.57m  1.53°   5.8°  12.9° |        72.7        1%     40% 0.092s |   0.553m  0.41m   nans
+  predictive:limiter:q                       93%   47.1s     0         0.1        0.0    0.53m  1.60°   6.6°  16.3° |        64.9        1%     50% 0.000s |   0.578m  0.44m   nans
+
+formation6_gate
+  config                                 success    time falls robot-robot robot-obst min dist   tilt    p99    max | big/rob/min in-domain  urgent   wait | form err    lag arrive
+  reactive:limiter                          100%   47.0s     0         0.0        0.0    0.60m  1.44°   5.9°  14.6° |        43.9        1%     58% 0.000s |   0.166m  0.09m   nans
+  predictive:phase+limiter:q                100%   46.8s     0         0.0        0.0    0.64m  1.32°   4.5°  12.0° |        35.7        3%     46% 0.089s |   0.147m  0.07m   nans
+  predictive:phase+gaslc_equal:q            100%   46.8s     0         0.0        0.0    0.64m  1.32°   4.6°  13.8° |        37.1        2%     43% 0.092s |   0.136m  0.05m   nans
+  predictive:limiter:q                      100%   47.0s     0         0.0        0.0    0.62m  1.39°   5.5°  14.0° |        39.3        2%     51% 0.000s |   0.150m  0.06m   nans
+
+formation16_pillars
+  config                                 success    time falls robot-robot robot-obst min dist   tilt    p99    max | big/rob/min in-domain  urgent   wait | form err    lag arrive
+  reactive:limiter                          100%   58.1s     1         0.2        0.3    0.49m  1.75°   7.2°  58.4° |        74.3        1%     57% 0.000s |   0.561m  0.43m   nans
+  predictive:phase+limiter:q                 93%   59.1s     1         0.1        0.4    0.56m  1.51°   5.7°  59.7° |        63.8        1%     39% 0.095s |   0.539m  0.39m   nans
+  predictive:phase+gaslc_equal:q             87%   60.2s     0         0.4        0.0    0.55m  1.49°   5.6°  17.2° |        64.6        1%     40% 0.094s |   0.606m  0.44m   nans
+  predictive:limiter:q                       87%   59.7s     0         0.3        0.2    0.56m  1.56°   6.4°  14.2° |        57.6        1%     49% 0.000s |   0.593m  0.43m   nans
+
+  big = command change >= 0.15 m/s (or 0.3 rad/s); in-domain = like the events the capability map
+  was measured on (settled straight walking, single change <= 0.8); urgent = TTC below threshold.
+  form err = mean distance robot-to-slot (formation scenarios); lag = how far the formation trails
+  its reference; arrive = mean per-robot arrival time (swap scenarios).

@@ -3,7 +3,7 @@
 Run:  python scripts/paper_figures.py                 (reads results/paper/*_robust, results/course, data/)
       python scripts/paper_figures.py --course-paths results/course/course_paths.json
 Out:  paper/figures/fig2_phase.pdf, fig3_primary.pdf, fig4_ablation.pdf, fig5_lookahead.pdf, fig6_course.pdf
-      (Fig. 1, the stack diagram, is drawn in TikZ inside the LaTeX source.)
+      (fig2_phase is Fig. 1 of the paper; Fig. 2, the stack diagram, is drawn in TikZ in the LaTeX source.)
 """
 import os
 import sys

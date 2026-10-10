@@ -1,0 +1,38 @@
+==============================================================================================================
+SWARM TEST  (ORCA + formation -> commander -> Bezier trot; mean over seeds)
+==============================================================================================================
+
+swap4
+  strategy      success    time falls robot-robot robot-obst min dist   tilt    p99    max | big/rob/min in-domain  urgent   wait
+  raw              100%    8.2s     0         0.0        0.0    0.72m  2.01°   8.1°  17.8° |        35.8        0%     23% 0.000s
+  limiter          100%    8.4s     0         0.0        0.0    0.69m  1.77°   6.1°  12.0° |        26.0        0%     14% 0.000s
+  limiter*1.35     100%    8.4s     0         0.0        0.0    0.69m  1.86°   6.6°  12.3° |        31.8        0%     22% 0.000s
+  gaslc_equal      100%    8.4s     0         0.0        0.0    0.70m  1.76°   5.8°  10.9° |        27.6        0%     17% 0.000s
+  gaslc_x1.35      100%    8.4s     0         0.0        0.0    0.70m  1.84°   6.4°  12.4° |        32.5        0%     24% 0.000s
+
+swap8
+  strategy      success    time falls robot-robot robot-obst min dist   tilt    p99    max | big/rob/min in-domain  urgent   wait
+  raw              100%   14.9s     9         0.2        0.0    0.46m  2.94°  22.1°  60.8° |        65.4        0%     57% 0.000s
+  limiter          100%   14.9s     0         0.6        0.0    0.57m  1.95°   7.3°  13.8° |        52.4        0%     54% 0.000s
+  limiter*1.35     100%   14.7s     0         0.0        0.0    0.58m  2.06°   9.0°  18.6° |        51.7        0%     52% 0.000s
+  gaslc_equal      100%   14.9s     0         0.2        0.0    0.52m  1.91°   6.7°  12.5° |        50.6        0%     54% 0.000s
+  gaslc_x1.35      100%   14.6s     0         0.2        0.0    0.55m  2.01°   8.5°  22.3° |        50.1        0%     53% 0.000s
+
+formation9_pillars
+  strategy      success    time falls robot-robot robot-obst min dist   tilt    p99    max | big/rob/min in-domain  urgent   wait
+  raw               20%   40.1s    19         2.0        6.0    0.35m  2.15°  19.5°  60.8° |        43.7        2%     58% 0.000s
+  limiter          100%   41.0s     0         0.4        1.8    0.53m  1.95°   8.5°  25.1° |        93.3        1%     55% 0.000s
+  limiter*1.35     100%   41.4s     2         0.4        2.0    0.47m  2.31°  12.1°  59.4° |       102.5        1%     55% 0.000s
+  gaslc_equal       80%   41.4s     1         0.8        1.6    0.52m  1.92°   8.2°  56.8° |        95.1        1%     57% 0.000s
+  gaslc_x1.35      100%   41.9s     0         0.6        1.0    0.43m  2.12°  10.0°  25.1° |        99.9        1%     56% 0.000s
+
+formation6_gate
+  strategy      success    time falls robot-robot robot-obst min dist   tilt    p99    max | big/rob/min in-domain  urgent   wait
+  raw               40%   46.7s     9         9.8        1.0    0.50m  1.71°  15.0°  59.9° |        34.8        1%     56% 0.000s
+  limiter           80%   46.7s     0         0.0        0.0    0.61m  1.36°   6.3°  16.4° |        35.5        1%     53% 0.000s
+  limiter*1.35     100%   46.7s     0         0.0        0.4    0.52m  1.51°   8.2°  43.0° |        40.2        1%     55% 0.000s
+  gaslc_equal       80%   47.7s     0         0.0        0.0    0.56m  1.41°   6.3°  12.4° |        47.0        1%     55% 0.000s
+  gaslc_x1.35      100%   46.7s     0         0.0        0.2    0.65m  1.50°   7.7°  22.1° |        42.5        1%     54% 0.000s
+
+  big = command change >= 0.15 m/s (or 0.3 rad/s); in-domain = like the events the capability map
+  was measured on (settled straight walking, single change <= 0.8); urgent = TTC below threshold.

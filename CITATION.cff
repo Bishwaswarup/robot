@@ -1,0 +1,42 @@
+cff-version: 1.2.0
+message: "If you use this software or its results, please cite the paper below (preferred-citation) and/or this repository."
+title: "Gait-phase-aware command timing for decentralized quadruped swarms (Unitree Go1, MuJoCo)"
+type: software
+authors:
+  - given-names: Bishwaswarup
+    family-names: Nayak
+    email: bishwaswarup@iisc.ac.in
+    affiliation: "Indian Institute of Science, Bengaluru, India"
+repository-code: "https://github.com/Bishwaswarup/robot"
+license: MIT
+version: "1.0.0"
+date-released: "2026-10-10"
+keywords:
+  - quadruped robots
+  - multi-robot systems
+  - swarm robotics
+  - collision avoidance
+  - ORCA
+  - legged locomotion
+  - gait phase
+  - MuJoCo
+  - Unitree Go1
+abstract: >-
+  Decentralized navigation for teams of trotting quadrupeds that accounts for the gait phase.
+  A Bezier-curve trot controller for the simulated Unitree Go1 exposes its gait phase; a measured
+  capability map predicts how strongly a velocity change destabilizes the robot at each phase.
+  The swarm layer solves reciprocal collision avoidance (ORCA) one gait period ahead, releases
+  each new command at the least destabilizing phase and shapes it with a gait-aware slew limiter,
+  while urgent conflicts bypass the timing. Includes all experiment scripts, raw results and the
+  scripts that reproduce every table and figure of the paper.
+preferred-citation:
+  type: article
+  title: "Gait-Phase-Aware Command Timing for Decentralized Quadruped Swarms"
+  authors:
+    - given-names: Bishwaswarup
+      family-names: Nayak
+      affiliation: "Indian Institute of Science, Bengaluru, India"
+  year: 2026
+  status: preprint
+  notes: "Preprint; under review. Update with the DOI once available."
+  url: "https://github.com/Bishwaswarup/robot"
