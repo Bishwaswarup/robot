@@ -1,0 +1,44 @@
+% Manuscript in a neutral single-column layout (compiles with any TeX Live).
+% For the Springer Nature template use main_sn.tex (needs sn-jnl.cls from Springer).
+\documentclass[11pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\IfFileExists{lmodern.sty}{\usepackage{lmodern}}{}
+\usepackage[margin=25mm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amssymb}
+\usepackage{tikz}
+\usetikzlibrary{positioning,shapes.geometric,arrows.meta,calc}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage{lineno}
+\usepackage[hidelinks]{hyperref}
+\usepackage{setspace}
+\setstretch{1.15}
+\linenumbers
+
+\title{Gait-Phase-Aware Command Timing for Decentralized Quadruped Swarms}
+\author{Bishwaswarup Nayak\\[2pt]
+  \small Indian Institute of Science, Bengaluru, India\\
+  \small \texttt{bishwaswarup@iisc.ac.in} (corresponding author)}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\input{abstract.tex}
+\end{abstract}
+
+\noindent\textbf{Keywords:} legged robots $\cdot$ multi-robot systems $\cdot$ collision avoidance $\cdot$
+gait phase $\cdot$ quadruped swarms $\cdot$ ORCA
+
+\input{body.tex}
+
+\section*{Declarations}
+\input{declarations.tex}
+
+\bibliographystyle{unsrtnat}
+\bibliography{refs}
+\end{document}
