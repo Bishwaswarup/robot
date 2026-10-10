@@ -66,7 +66,8 @@ def run(job, on_step=None):
         c.gait.phi = rng.uniform()
     cache = {}
     coms = [make_commander(c, strategy, cmap, env, cache) for c in ctrls]
-    agents = [SwarmAgent(radius=R_ROBOT, tau_obs=job.get("tau_obs", 2.0), turn_gate=bool(job.get("turn_gate", 0)))
+    agents = [SwarmAgent(radius=R_ROBOT, tau_obs=job.get("tau_obs", 2.0), turn_gate=bool(job.get("turn_gate", 0)),
+                         escape=bool(job.get("escape", 0)))
               for _ in range(N)]
     trunk = [m.body(f"go1_{i}/trunk").id for i in range(N)]
     root_of = np.array([m.body_rootid[m.geom_bodyid[g]] for g in range(m.ngeom)])
@@ -134,6 +135,7 @@ def run(job, on_step=None):
                 urgent = (ttc(pos[i], v_cmd, [n[:3] for n in nbs], R_ROBOT) < job["urgent_ttc"] or
                           ttc(pos[i], v_cmd, [(q, np.zeros(2), r) for q, r in static_orca], R_ROBOT)
                           < job.get("static_ttc", 1.5))
+                agents[i].escape_to = plan.point(s_track[i] + 1.5)     # back onto the path ahead
                 if layer == "predictive" and not urgent:
                     v_w = agents[i].predictive(pos[i], v_cmd, pref_ahead, nbs, static_orca, look, far)
                     deadline = look
@@ -324,6 +326,7 @@ def main():
     ap.add_argument("--speed", type=float, default=0.3, help="reference speed along the path (m/s)")
     ap.add_argument("--urgent-ttc", type=float, default=0.8)
     ap.add_argument("--turn-gate", action="store_true", help="body-command envelope: |wz|<=1, |vy|<=0.3, slow while turning")
+    ap.add_argument("--robust", action="store_true", help="turn gate + local-minimum escape")
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 1))
     ap.add_argument("--out", default=os.path.join(ROOT, "results", "course"))
     ap.add_argument("--analyse-only", action="store_true")
@@ -335,7 +338,7 @@ def main():
     else:
         seeds = 1 if a.quick else a.seeds
         jobs = [dict(team=int(tm), config=c, seed=s, speed=a.speed, urgent_ttc=a.urgent_ttc, record=int(s == 0),
-                     turn_gate=int(a.turn_gate))
+                     turn_gate=int(a.turn_gate or a.robust), escape=int(a.robust))
                 for tm, s, c in itertools.product(a.teams.split(","), range(seeds), a.configs.split(","))]
         jobs.sort(key=lambda j: -j["team"])
         print(f"{len(jobs)} course runs on {a.workers} workers")

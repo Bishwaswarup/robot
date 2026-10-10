@@ -55,17 +55,20 @@ SUITES = {
 }
 
 
-def suite_dir(name, quick, turn_gate):
-    return os.path.join(ROOT, "results", "paper", name + ("_gate" if turn_gate else "") + ("_quick" if quick else ""))
+def suite_dir(name, quick, turn_gate, robust=False):
+    tag = "_robust" if robust else ("_gate" if turn_gate else "")
+    return os.path.join(ROOT, "results", "paper", name + tag + ("_quick" if quick else ""))
 
 
-def run_suite(name, spec, quick, workers, urgent_ttc, turn_gate=False):
-    out = suite_dir(name, quick, turn_gate)
+def run_suite(name, spec, quick, workers, urgent_ttc, turn_gate=False, robust=False):
+    out = suite_dir(name, quick, turn_gate, robust)
     os.makedirs(out, exist_ok=True)
     scen = spec.get("quick_scenarios", spec["scenarios"]) if quick else spec["scenarios"]
     seeds = spec["quick_seeds"] if quick else spec["seeds"]
-    jobs = [dict(scenario=s, config=c, seed=sd, urgent_ttc=urgent_ttc, lookahead=0.36, record=int(sd == 0),
-                 turn_gate=int(turn_gate), **spec.get("job", {}))
+    extra = dict(spec.get("job", {}), turn_gate=int(turn_gate))
+    if robust:
+        extra.update(SE.ROBUST)
+    jobs = [dict(scenario=s, config=c, seed=sd, urgent_ttc=urgent_ttc, lookahead=0.36, record=int(sd == 0), **extra)
             for s, sd, c in itertools.product(scen, range(seeds), spec["configs"])]
     jobs.sort(key=lambda j: -len(SE.SCENARIOS[j["scenario"]]()["starts"]))
     print(f"\n[{name}] {len(jobs)} runs on {workers} workers -> {os.path.relpath(out, ROOT)}")
@@ -104,12 +107,15 @@ def main():
     ap.add_argument("--turn-gate", action="store_true",
                     help="body-command envelope for every robot (|wz|<=1, |vy|<=0.3, slow while turning); "
                          "results go to results/paper/<suite>_gate")
+    ap.add_argument("--robust", action="store_true",
+                    help="static-obstacle safety + turn gate + local-minimum escape for every robot and "
+                         "every suite; results go to results/paper/<suite>_robust")
     ap.add_argument("--analyse-only", action="store_true")
     a = ap.parse_args()
     for name in a.suites.split(","):
-        out = suite_dir(name, a.quick, a.turn_gate)
+        out = suite_dir(name, a.quick, a.turn_gate, a.robust)
         if not a.analyse_only:
-            out = run_suite(name, SUITES[name], a.quick, a.workers, a.urgent_ttc, a.turn_gate)
+            out = run_suite(name, SUITES[name], a.quick, a.workers, a.urgent_ttc, a.turn_gate, a.robust)
         analyse(out)
 
 

@@ -474,3 +474,18 @@ Obstacle suite (static safety on, 15 seeds), full vs base: pillars9 urgent -15.7
 min dist +0.069**; gate p99 -1.95**, max -4.1**, min dist +0.057*; pillars16 p99 -1.99**, min dist
 +0.068**, urgent -21.1** but 13/15 success (1 fall, 1 stuck) vs 15/15. Obstacle touches with safety:
 full 0.4 / 0 / 0.5 per run (pillars9 / gate / pillars16) vs 1.05 / 0.45 / 2.5 without.
+
+### Turn-gate runs (course 20 seeds, obstacle suite 15 seeds) + local-minimum escape - 2026-10-09
+Turn gate removed most falls: course team 6 falls base/pred/full = 1/0/0 (were 0/0/3); obstacle suite
+falls 1/0/0/1 (base, pred, phase+lim, full) vs 1/2/2/1 before; obstacle touches near 0 everywhere.
+Full system still best on p99 (course 6.7 vs 7.9 deg; pillars9 5.7 vs 7.2; gate 4.5 vs 5.9; pillars16 5.5
+vs 7.1) and min dist (+5-9 cm). NEW problem: 13 stuck runs, ALL in predictive configs (success 80-93 %),
+course full 18/20. Diagnosis (gate seed 0, reproduced): robot 0 pressed against the gate wall at
+(6.34,-1.35) with its preferred velocity pointing through the wall to its slot -> ORCA returns ~0 for
+45 s (local minimum; swarm scenarios have no path planner). The gate's slow turning made robots end up
+there more often. Fix: SwarmAgent(escape=True): if ORCA output < 0.05 m/s while the preferred speed
+> 0.15 for > 1 s, turn the preferred velocity 75 deg towards a hint (formation reference point /
+path 1.5 m ahead) for 2 s, flip side if still stuck. Cloud check: gate seeds 0, 5 (phase+lim),
+pillars9 seed 3 (full), course seeds 1, 12 (full) -> all succeed, 0 falls, 0 contacts.
+--robust = static safety + turn gate + escape (swarm_eval, paper_runs -> results/paper/<suite>_robust,
+course_eval). Plan: run all paper suites + course with --robust and use those as the paper numbers.

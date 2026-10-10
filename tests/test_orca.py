@@ -82,3 +82,18 @@ def test_turn_gate_limits_body_command():
     assert abs(wz1) <= 1.0 + 1e-9 and abs(vy1) <= 0.6 * 0.3 + 1e-9   # slowed to 30 % while turning
     a, b = SwarmAgent(turn_gate=True), SwarmAgent()
     assert np.allclose(a.body_command(np.array([0.5, 0.0]), 0.0), b.body_command(np.array([0.5, 0.0]), 0.0))
+
+
+def test_escape_breaks_wall_deadlock():
+    import numpy as np
+    from go1_bezier.swarm import SwarmAgent
+    wall = [((1.0, y), 0.22) for y in np.arange(-3.0, 0.01, 0.4)]     # wall below y=0, opening above
+    a = SwarmAgent(escape=True)
+    a.escape_to = np.array([2.0, 1.5])                                 # goal side: through the opening
+    p = np.array([0.35, -1.5])
+    moved = 0.0
+    for _ in range(60):                                                # 6 s, pref straight into the wall
+        v = a.velocity(p, np.array([0.5, 0.0]), [], wall, far_from_goal=False)
+        p = p + v * 0.1
+        moved = max(moved, p[1] + 1.5)
+    assert moved > 0.5                                                 # slid along the wall towards the gap

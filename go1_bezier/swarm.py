@@ -25,7 +25,7 @@ def wrap(a):
 class SwarmAgent:
     def __init__(self, radius=0.38, v_max=0.6, tau=2.0, tau_obs=1.0, dt=0.1, sense_radius=4.0,
                  max_neighbours=10, keep_right_deg=15.0, k_heading=2.0, w_max=1.2, vy_max=0.35,
-                 turn_gate=False):
+                 turn_gate=False, escape=False):
         self.r, self.v_max, self.tau, self.tau_obs, self.dt = radius, v_max, tau, tau_obs, dt
         self.sense_radius, self.max_nb = sense_radius, max_neighbours
         self.keep_right = np.radians(keep_right_deg)
@@ -38,6 +38,12 @@ class SwarmAgent:
             self.w_max, self.vy_max = min(w_max, 1.0), min(vy_max, 0.3)
         self.v_prev = np.zeros(2)          # ORCA uses the last chosen velocity (reciprocity)
         self.heading_ref = None
+        # escape: local-minimum breaker. If ORCA keeps returning ~0 while the robot wants to move
+        # (pressed against a wall between it and its slot) for > 1 s, follow the obstacle for 2 s:
+        # preferred velocity turned 75 deg towards `escape_to` (caller sets it each tick, e.g. the
+        # formation reference point / path ahead); the side flips if the robot is still stuck.
+        self.escape, self.escape_to = escape, None
+        self.stall_t, self.detour_t, self.detour_side, self.n_detours = 0.0, 0.0, 1.0, 0
 
     def velocity(self, p, v_pref, neighbours, obstacles, far_from_goal=True):
         """neighbours: list of (p_j, v_j, r_j); obstacles: list of (p_o, r_o)."""
@@ -48,8 +54,24 @@ class SwarmAgent:
         v_pref = np.asarray(v_pref, float)
         if far_from_goal and np.linalg.norm(v_pref) > 1e-3:      # keep right: breaks symmetric deadlocks
             v_pref = rot(-self.keep_right) @ v_pref
+        if self.escape and self.detour_t > 0:
+            v_pref = rot(self.detour_side * np.radians(75)) @ v_pref
+            self.detour_t -= self.dt
         v = orca_velocity(p, self.v_prev, self.r, v_pref, self.v_max, nb, ob,
                           self.tau, self.tau_obs, self.dt)
+        if self.escape:
+            stalled = np.linalg.norm(v) < 0.05 and np.linalg.norm(v_pref) > 0.15
+            self.stall_t = self.stall_t + self.dt if stalled else 0.0
+            if self.detour_t <= 0 and not stalled:
+                self.n_detours = 0
+            if self.stall_t > 1.0 and self.detour_t <= 0:
+                side = 1.0
+                if self.escape_to is not None:
+                    to = np.asarray(self.escape_to, float) - p
+                    side = 1.0 if v_pref[0] * to[1] - v_pref[1] * to[0] >= 0 else -1.0
+                self.detour_side = side if self.n_detours % 2 == 0 else -side
+                self.detour_t, self.stall_t = 2.0, 0.0
+                self.n_detours += 1
         self.v_prev = v
         return v
 

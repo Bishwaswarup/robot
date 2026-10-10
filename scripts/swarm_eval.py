@@ -85,6 +85,7 @@ def parse_lookahead(cfg, default):
 
 
 STATIC_SAFETY = dict(static_margin=0.1, tau_obs=2.0, static_ttc=1.5)   # same as course_eval
+ROBUST = dict(STATIC_SAFETY, turn_gate=1, escape=1)    # + body-command envelope + local-minimum escape
 
 
 def run(job):
@@ -110,7 +111,7 @@ def run(job):
     margin = job.get("static_margin", 0.0)
     obst = [(q, r + margin) for q, r in sc["obstacles"]]
     static_ttc = job.get("static_ttc") or job["urgent_ttc"]
-    agents = [SwarmAgent(radius=R_ROBOT, turn_gate=bool(job.get("turn_gate", 0)),
+    agents = [SwarmAgent(radius=R_ROBOT, turn_gate=bool(job.get("turn_gate", 0)), escape=bool(job.get("escape", 0)),
                          **({"tau_obs": job["tau_obs"]} if job.get("tau_obs") else {}))
               for _ in range(N)]
     trunk = [m.body(f"go1_{i}/trunk").id for i in range(N)]
@@ -167,6 +168,7 @@ def run(job):
                 v_cmd = Rz @ applied[:2]
                 urgent = (ttc(pos[i], v_cmd, [n[:3] for n in nbs], R_ROBOT) < job["urgent_ttc"] or
                           ttc(pos[i], v_cmd, [(q, np.zeros(2), r) for q, r in obst], R_ROBOT) < static_ttc)
+                agents[i].escape_to = plan.reference(t)[0] if sc["plan"] is not None else target
                 if layer == "predictive" and not urgent:
                     v_w = agents[i].predictive(pos[i], v_cmd, pref_ahead, nbs, obst, look, far)
                     deadline = look
@@ -344,6 +346,7 @@ def main():
     ap.add_argument("--lookahead", type=float, default=0.36, help="s (one gait period)")
     ap.add_argument("--urgent-ttc", type=float, default=0.8)
     ap.add_argument("--turn-gate", action="store_true", help="body-command envelope (see SwarmAgent)")
+    ap.add_argument("--robust", action="store_true", help="static safety + turn gate + local-minimum escape")
     ap.add_argument("--static-safety", action="store_true",
                     help="obstacle margin 0.1 m, tau_obs 2 s, urgent if TTC to an obstacle < 1.5 s")
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 1))
@@ -358,6 +361,8 @@ def main():
         scen = ["swap4", "swap8"] if a.quick else a.scenarios.split(",")
         seeds = 1 if a.quick else a.seeds
         extra = dict(STATIC_SAFETY if a.static_safety else {}, turn_gate=int(a.turn_gate))
+        if a.robust:
+            extra = dict(ROBUST)
         jobs = [dict(scenario=s, config=cf, seed=sd, urgent_ttc=a.urgent_ttc, lookahead=a.lookahead,
                      record=int(sd == 0), **extra)
                 for s, sd, cf in itertools.product(scen, range(seeds), a.configs.split(","))]
