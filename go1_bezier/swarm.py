@@ -44,6 +44,7 @@ class SwarmAgent:
         # formation reference point / path ahead); the side flips if the robot is still stuck.
         self.escape, self.escape_to = escape, None
         self.stall_t, self.detour_t, self.detour_side, self.n_detours = 0.0, 0.0, 1.0, 0
+        self.progress = 0.3
 
     def velocity(self, p, v_pref, neighbours, obstacles, far_from_goal=True):
         """neighbours: list of (p_j, v_j, r_j); obstacles: list of (p_o, r_o)."""
@@ -54,13 +55,18 @@ class SwarmAgent:
         v_pref = np.asarray(v_pref, float)
         if far_from_goal and np.linalg.norm(v_pref) > 1e-3:      # keep right: breaks symmetric deadlocks
             v_pref = rot(-self.keep_right) @ v_pref
+        pref_hat = v_pref / max(np.linalg.norm(v_pref), 1e-9)      # direction BEFORE any detour
+        pref_speed = np.linalg.norm(v_pref)
         if self.escape and self.detour_t > 0:
             v_pref = rot(self.detour_side * np.radians(75)) @ v_pref
             self.detour_t -= self.dt
         v = orca_velocity(p, self.v_prev, self.r, v_pref, self.v_max, nb, ob,
                           self.tau, self.tau_obs, self.dt)
         if self.escape:
-            stalled = np.linalg.norm(v) < 0.05 and np.linalg.norm(v_pref) > 0.15
+            # stalled = little PROGRESS along the preferred direction over ~1 s (an EMA of
+            # v . pref_hat), not just low speed: a robot jittering in front of an obstacle counts
+            self.progress += (float(v @ pref_hat) - self.progress) * self.dt / 1.0
+            stalled = pref_speed > 0.3 and self.progress < 0.05
             self.stall_t = self.stall_t + self.dt if stalled else 0.0
             if self.detour_t <= 0 and not stalled:
                 self.n_detours = 0
@@ -68,9 +74,10 @@ class SwarmAgent:
                 side = 1.0
                 if self.escape_to is not None:
                     to = np.asarray(self.escape_to, float) - p
-                    side = 1.0 if v_pref[0] * to[1] - v_pref[1] * to[0] >= 0 else -1.0
+                    side = 1.0 if pref_hat[0] * to[1] - pref_hat[1] * to[0] >= 0 else -1.0
                 self.detour_side = side if self.n_detours % 2 == 0 else -side
                 self.detour_t, self.stall_t = 2.0, 0.0
+                self.progress = 0.3                                   # give the detour time to work
                 self.n_detours += 1
         self.v_prev = v
         return v
@@ -100,6 +107,22 @@ class SwarmAgent:
         nb_f = [(np.asarray(n[0]) + np.asarray(n[1]) * lookahead,) + tuple(n[1:]) for n in neighbours]
         self.v_prev = np.asarray(v_cmd, float)
         return self.velocity(p_f, v_pref_fn(p_f), nb_f, obstacles, far_from_goal)
+
+
+def lag_priority(err_self, err_nbs, neighbours, settled=0.4, late=1.0, yield_resp=0.9):
+    """Late robots get right of way: a robot already at its slot/goal (error < settled) takes
+    most of the avoidance (moves aside) for a neighbour that is still far from its own
+    (error > late), and vice versa. Otherwise the existing responsibility is kept (0.5 default).
+    Fixes 'late robot cannot get through the settled formation' deadlocks."""
+    out = []
+    for n, e in zip(neighbours, err_nbs):
+        resp = n[3] if len(n) > 3 else 0.5
+        if err_self < settled and e > late:
+            resp = yield_resp
+        elif err_self > late and e < settled:
+            resp = 1.0 - yield_resp
+        out.append((n[0], n[1], n[2], resp))
+    return out
 
 
 def queue_responsibility(p, heading, neighbours, in_bottleneck, ahead=0.3, yield_resp=0.9, lead_resp=0.1):

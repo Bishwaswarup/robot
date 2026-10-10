@@ -97,3 +97,18 @@ def test_escape_breaks_wall_deadlock():
         p = p + v * 0.1
         moved = max(moved, p[1] + 1.5)
     assert moved > 0.5                                                 # slid along the wall towards the gap
+
+
+def test_lag_priority_settled_robot_yields():
+    import numpy as np
+    from go1_bezier.swarm import lag_priority
+    nbs = [(np.zeros(2), np.zeros(2), 0.38), (np.ones(2), np.zeros(2), 0.38, 0.1), (np.ones(2) * 2, np.zeros(2), 0.38)]
+    out = lag_priority(0.1, [2.0, 0.5, 0.2], nbs)          # I am settled; nb0 is late, nb1 neutral, nb2 settled
+    assert out[0][3] == 0.9 and out[1][3] == 0.1 and out[2][3] == 0.5
+    out = lag_priority(1.5, [0.2, 2.0, 0.6], nbs)          # I am late
+    assert out[0][3] == pytest_approx(0.1) and out[1][3] == 0.1 and out[2][3] == 0.5
+
+
+def pytest_approx(x):
+    import pytest
+    return pytest.approx(x)

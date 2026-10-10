@@ -33,7 +33,7 @@ import numpy as np
 import mujoco
 from go1_bezier import load_team, make_arena, Go1BezierController, CapabilityMap, PushEnvelope
 from go1_bezier.gasl import make_commander
-from go1_bezier.swarm import SwarmAgent, elastic_scale, queue_responsibility
+from go1_bezier.swarm import lag_priority, SwarmAgent, elastic_scale, queue_responsibility
 from go1_bezier.course import obstacle_course, add_course_geoms
 from go1_bezier.scenarios import R_ROBOT
 from swarm_eval import ttc, parse_config, parse_lookahead, MAP, ENV
@@ -113,6 +113,10 @@ def run(job, on_step=None):
             dyn_obs = static + [(p, mv.r) for (p, _), mv in zip(mstate, movers)]
             heading = plan.heading_at(t)
             yaws = [c.yaw() for c in ctrls]
+            if job.get("escape"):                         # slot errors for lag priority
+                lam_all = plan.team_scale(t) if N > 1 else 1.0
+                errs = np.array([np.linalg.norm(plan.slot(j, t, lam_all)[0] - pos[j]) for j in range(N)])
+                errs[fallen] = 0.7                       # neutral: fallen robots cannot yield
             for i in range(N):
                 if fallen[i]:
                     continue
@@ -126,6 +130,8 @@ def run(job, on_step=None):
                 nbs = [(pos[j], vel[j] if not fallen[j] else np.zeros(2), R_ROBOT) for j in range(N) if j != i]
                 if queue:
                     nbs = queue_responsibility(pos[i], plan.heading_s(plan.progress(pos[i])), nbs, lam < 0.6)
+                if job.get("escape"):
+                    nbs = lag_priority(errs[i], [errs[j] for j in range(N) if j != i], nbs)
                 nbs = nbs + mover_nbs
                 Rz = np.array([[np.cos(yaws[i]), -np.sin(yaws[i])], [np.sin(yaws[i]), np.cos(yaws[i])]])
                 v_cmd = Rz @ ctrls[i].cmd_target[:2]

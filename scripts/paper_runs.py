@@ -11,6 +11,8 @@ Run:  python scripts/paper_runs.py --quick                 (~10-15 min, 2 seeds,
       python scripts/paper_runs.py --suites main           (one suite)
       python scripts/paper_runs.py --suites obstacles      (obstacle-safety re-run)
       python scripts/paper_runs.py --suites obstacles --turn-gate   (+ body-command envelope)
+      python scripts/paper_runs.py --suites main,lookahead,scaling --robust   (FINAL paper runs; --robust already
+                                                                 includes the static safety of 'obstacles')
       python scripts/paper_runs.py --analyse-only          (re-make summaries + stats)
 Out:  results/paper/<suite>/swarm_eval.csv, swarm_summary.txt, swarm_stats.txt, swarm_paths_*.png
 """

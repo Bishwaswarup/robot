@@ -489,3 +489,22 @@ path 1.5 m ahead) for 2 s, flip side if still stuck. Cloud check: gate seeds 0, 
 pillars9 seed 3 (full), course seeds 1, 12 (full) -> all succeed, 0 falls, 0 contacts.
 --robust = static safety + turn gate + escape (swarm_eval, paper_runs -> results/paper/<suite>_robust,
 course_eval). Plan: run all paper suites + course with --robust and use those as the paper numbers.
+
+### --robust results (main 20 seeds, lookahead/scaling 10, obstacles 15, course 20) - 2026-10-10
+Falls: main 0/480 (all configs), lookahead 0/100, scaling 1/90 (baseline), obstacles 2/180 (baseline 1,
+phase+limiter 1), course 1/120 (baseline). Full system: 0 falls in every suite.
+Full vs baseline (primary metrics; Holm over 30 tests: 23 significant):
+ pillars9 urgent -30%** p99 -19%** min dist +8%** | gate -34%** / -21%** / +8%** | swap8 -5% / -11%** / 0
+ swap16 -28%** / -24%** / +6%* | swap32 -22%** / -19%** / +2% | pillars16 -39%** / -22%** / +4-5%
+ swap4 (sparse): urgent +109%** (worse), p99 -10%*, min dist -2%** (worse) -> report as the limit case.
+Remaining failures (no falls): 7 runs, all formation16 pillars (+1 course, +1 main q-only). Diagnosis
+(f16 full seed 10, reproduced): a front-row robot got held up behind pillar (6.25,0.10) for ~15 s while
+ORCA jittered (speed 0.05-0.1, so the speed-based stall detector never fired), then could not get back
+through the already-settled 4x4 formation before T (rows 1.4 m apart, robots need 1.52 m).
+Fix v2: (1) stall = EMA(v . pref_hat, 1 s) < 0.05 with pref > 0.3 (progress, not speed);
+(2) lag_priority: robot at its slot (err < 0.4 m) takes 90 % of the avoidance for a neighbour that is
+still > 1 m from its slot (late robots get right of way); fallen robots neutral. Both part of --robust
+(escape=1). Cloud check: 6/7 failing cases now succeed (f16 full 10, 11; phase+lim 14; reactive:q pillars9
+12; baseline f16 seed 1 fall gone; course full 1); only pred:limiter:q f16 seed 1 still fails.
+Swap8 spot check unchanged (15.0-15.8 s, 0 falls). NOTE: --robust already includes static safety, so the
+'obstacles' suite duplicates main/scaling scenarios -> not needed in the final run.

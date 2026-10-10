@@ -41,7 +41,7 @@ warnings.filterwarnings("ignore", message="Mean of empty slice")
 from go1_bezier import load_team, make_arena, Go1BezierController, CapabilityMap, PushEnvelope
 from go1_bezier.gasl import make_commander
 from go1_bezier.commander import PhaseAwareCommander
-from go1_bezier.swarm import SwarmAgent, goal_velocity, elastic_scale, queue_responsibility
+from go1_bezier.swarm import lag_priority, SwarmAgent, goal_velocity, elastic_scale, queue_responsibility
 from go1_bezier.scenarios import SCENARIOS, R_ROBOT, add_obstacles
 
 ROOT = os.path.join(HERE, "..")
@@ -143,6 +143,13 @@ def run(job):
         pos = np.array([d.xpos[b][:2] for b in trunk])
         if k % tick == 0:
             yaws = [c.yaw() for c in ctrls]
+            if job.get("escape"):                         # slot/goal errors for lag priority
+                if sc["plan"] is not None:
+                    errs = np.array([np.linalg.norm(sc["plan"].slot(j, t, elastic_scale(pos[j], sc["plan"].heading,
+                                     sc["obstacles"]) if job.get("elastic", 1) else 1.0)[0] - pos[j]) for j in range(N)])
+                else:
+                    errs = np.array([np.linalg.norm(np.asarray(sc["goals"][j]) - pos[j]) for j in range(N)])
+                errs[fallen] = 0.7                       # neutral: fallen robots cannot yield
             for i in range(N):
                 if fallen[i]:
                     continue
@@ -163,6 +170,8 @@ def run(job):
                 nbs = [(pos[j], vel[j] if not fallen[j] else np.zeros(2), R_ROBOT) for j in range(N) if j != i]
                 if queue:
                     nbs = queue_responsibility(pos[i], heading, nbs, in_bn)
+                if job.get("escape"):
+                    nbs = lag_priority(errs[i], [errs[j] for j in range(N) if j != i], nbs)
                 applied = ctrls[i].cmd_target
                 Rz = np.array([[np.cos(yaws[i]), -np.sin(yaws[i])], [np.sin(yaws[i]), np.cos(yaws[i])]])
                 v_cmd = Rz @ applied[:2]
