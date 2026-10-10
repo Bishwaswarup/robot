@@ -1,6 +1,3 @@
-%% Manuscript for the International Journal of Intelligent Robotics and Applications (Springer)
-%% Springer Nature LaTeX template (sn-jnl, sn-mathphys-num: numbered references, decimal headings).
-%% Build:  pdflatex main && bibtex main && pdflatex main && pdflatex main   (or: latexmk -pdf main)
 \documentclass[pdflatex,sn-mathphys-num]{sn-jnl}
 
 \usepackage{graphicx}
@@ -18,24 +15,27 @@
 
 \begin{document}
 
-\title[Gait-phase-aware command timing for quadruped swarms]{Gait-Phase-Aware Command Timing for Decentralized Quadruped Swarms}
+\title[Gait-phase-aware command timing for quadruped swarms]{Gait-Aware Command Timing for Decentralized Quadruped Swarms}
 
 \author*[1]{\fnm{Bishwaswarup} \sur{Nayak}\,\orcidlink{0009-0001-9926-5329}}\email{bishwaswarup@iisc.ac.in}
 
 \affil*[1]{\orgdiv{Department of Physics}, \orgname{Indian Institute of Science}, \orgaddress{\city{Bengaluru}, \postcode{560012}, \state{Karnataka}, \country{India}}}
 
-\abstract{Multi-robot collision avoidance treats each robot as a point that can change velocity at any instant. A
-trotting quadruped cannot: how well it absorbs a change of commanded velocity depends on where in the gait
-cycle the change arrives. We measure this dependence for a B\'ezier-curve trot controller on a simulated
-Unitree Go1 and use it in a decentralized swarm. The phase-aware layer solves reciprocal collision avoidance
-(ORCA) one gait period ahead, releases each new velocity command at the gait phase our capability map
-predicts is least destabilizing, and shapes it with a gait-aware slew limiter; urgent conflicts bypass the
-timing. In MuJoCo, across 4 to 32 robots in antipodal swaps, pillar fields, a narrow gate and a 53\,m obstacle
-course, the full system is compared with the same stack without timing (790 runs, paired by seed,
-Holm-corrected). In crowded and obstructed scenarios it cuts urgent avoidance events by 22--39\% and
-99th-percentile body tilt by 19--24\%, increases the closest robot--robot distance in formations by 2--5\,cm,
-and had no falls in any run. Prediction without phase timing gives no consistent benefit, so the timing is the
-active ingredient. In sparse traffic (four robots) the method costs more than it saves.}
+\abstract{Multi-robot collision avoidance treats each robot as a point that can change velocity at any
+instant. A trotting quadruped cannot: how well it absorbs a change of commanded velocity depends on where
+in the gait cycle the change arrives. We measure this dependence for a B\'ezier-curve trot controller on a
+simulated Unitree Go1 and build a decentralized swarm layer around it. Each robot solves reciprocal
+collision avoidance (ORCA) one gait period ahead, holds each non-urgent velocity change for at most half a
+gait period, releases it at the phase a capability map predicts is least destabilizing, and shapes it with
+a gait-aware slew limiter; urgent conflicts bypass the hold. In MuJoCo, with 6 to 32 robots in crowded or
+obstructed scenarios, the full system reduced urgent avoidance events by 22--39\% and 99th-percentile body
+tilt by 19--24\% relative to a reactive baseline (paired by seed, Holm-corrected). It had no falls in 230
+runs; the baseline fell twice in 170 runs. A control that releases after a random wait of the same length
+shows that prediction and the bounded hold produce the reduction in urgent events, while the phase choice
+adds a further 4--6\% reduction in tilt. Replaying 488 recorded swarm events at nine release times shows
+that the map's phase ranking, accurate for isolated steps, transfers only partly to the rapid command
+sequences of a swarm. With four robots the method increases urgent events, and in an eight-robot swap it
+does not change them.}
 
 \keywords{Legged robots, Multi-robot systems, Collision avoidance, Gait phase, Quadruped swarms, ORCA}
 
@@ -58,21 +58,25 @@ avoidance commands is a source of disturbances to every robot's gait. Formation 
 quadrupeds \cite{zhan2025safe,noren2026role} shape \emph{what} each robot is commanded, but not \emph{when}
 within the gait the command is delivered.
 
-This paper asks one question: does timing the swarm layer's velocity changes to the gait phase make a
-quadruped swarm safer, and at what cost? We answer it in simulation with a fully open stack and paired
-statistics. Our contributions are:
+This paper asks whether timing the swarm layer's velocity changes to the gait phase makes a quadruped
+swarm safer, and at what cost, and separates two mechanisms that such timing combines: holding a
+non-urgent change for a short, bounded time, and choosing the gait phase at which it is released. We
+answer it in simulation with a fully open stack and paired statistics. Our contributions are:
 \begin{enumerate}
   \item A measurement of phase-dependent fragility for a B\'ezier trot on a Unitree Go1 model: a pilot
     experiment, a capability map over phase, direction and size of a command change (held-out
-    $R^2$ 0.94--0.98, against 0.70--0.87 without phase), and a push-impulse envelope in which knowing the
-    phase raises the tolerable impulse by a factor of 1.33--1.44.
-  \item A phase-aware command layer: a commander that releases each velocity change at the predicted best
-    phase within a deadline, and a gait-aware slew limiter that shapes the change by phase.
-  \item A predictive ORCA layer that plans one gait period ahead, so that the commander has time to wait
-    for a good phase, with an urgent bypass when the time to collision is short.
+    $R^2$ 0.94--0.98 for isolated steps, against 0.70--0.87 without phase), and a push-impulse envelope in
+    which knowing the phase raises the tolerable impulse by a factor of 1.33--1.44.
+  \item A decentralized command layer for quadruped swarms: ORCA solved one gait period ahead, a
+    commander that holds each non-urgent change for at most half a gait period and releases it at the
+    phase the map predicts is safest, a gait-aware slew limiter, and an urgent bypass.
   \item An ablation and scaling study over 4--32 robots, a gate, pillar fields and a 53\,m obstacle course
-    (790 runs in the final configuration, paired by seed, Holm-corrected), including negative results:
-    where the method does not help, and a robustness fix we tried and rejected.
+    (1{,}110 runs, paired by seed, Holm-corrected), with controls that release after a random wait of the
+    same length or at the map's worst phase. Prediction and the bounded hold produce the reduction in
+    urgent events; the phase choice adds a smaller, consistent reduction in body tilt.
+  \item A test of the capability map in the context where it is used: 488 recorded swarm events replayed at
+    nine release times. The map's phase ranking transfers only partly from isolated steps to the rapid
+    command sequences of a swarm, and we identify where it holds.
 \end{enumerate}
 
 \section{Related work}\label{sec:related}
@@ -102,10 +106,34 @@ through a limit cycle. These results are used to choose footholds and step times
 same fact one level up: to choose \emph{when} the navigation layer changes its command.
 
 \subsection{Command shaping for legged robots}
-Velocity commands to legged controllers are commonly
-rate-limited, and learned controllers are trained on curricula of command changes. A recent example
-schedules commands by the robot's current velocity to reach high speed \cite{tao2026speed}. To our
-knowledge, no prior work schedules navigation commands by gait phase.
+Velocity commands to legged controllers are commonly rate-limited, and learned controllers are trained on
+curricula of command changes. A recent example schedules commands by the robot's current velocity to
+extend its top speed \cite{tao2026speed}; the aim there is the locomotion envelope of one robot. Our
+question differs in purpose: we choose \emph{when} a navigation-layer velocity change, issued for
+collision avoidance in a team, reaches the locomotion controller. To our knowledge, no prior work
+schedules multi-robot navigation commands by gait phase.
+
+\begin{table}[t]
+  \centering
+  \caption{How this work relates to the three closest research areas.}
+  \label{tab:related}
+  \small
+  \begin{tabular}{@{}p{30mm} p{40mm} p{42mm}@{}}
+    \toprule
+    Area & What it addresses & What this paper adds \\
+    \midrule
+    Reciprocal collision avoidance \cite{vandenberg2011orca,vandenberg2011avo,alonsomora2013nhorca}
+      & Decentralized collision-free velocity selection under constant platform limits
+      & Plans one gait period ahead and holds non-urgent changes, releasing them by gait phase \\
+    Gait robustness and step timing \cite{pratt2006capture,khadiv2016step,chen2022capturability}
+      & Phase-dependent balance and recovery of one robot
+      & Uses the measured phase-dependent response to schedule navigation commands \\
+    Quadruped formation and navigation \cite{zhan2025safe,noren2026role}
+      & Formation keeping and collision avoidance with velocity-controlled robots
+      & Tests whether command timing improves body stability during team navigation \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
 \section{The low-level controller and its phase-dependent fragility}\label{sec:controller}
 
@@ -181,7 +209,7 @@ identical in every configuration, the baseline included, wraps the stack.
       note/.style={font=\footnotesize, text=black!65}]
     \node[box] (orca) {\textbf{Predictive ORCA}\\[-1pt]{\footnotesize plans for $t+L$, $L = 0.36$\,s}};
     \node[dec, below=of orca] (urg) {Urgent?};
-    \node[main, below=of urg] (cmd) {\textbf{Phase-aware commander}\\[-1pt]{\footnotesize release at best phase before deadline}};
+    \node[main, below=of urg] (cmd) {\textbf{Phase-aware commander}\\[-1pt]{\footnotesize hold $\leq 0.18$\,s; release at best phase}};
     \node[box, below=of cmd] (lim) {\textbf{Gait-aware slew limiter}\\[-1pt]{\footnotesize ramp rate set by phase, same mean}};
     \node[box, below=of lim] (trot) {\textbf{B\'ezier trot controller}\\[-1pt]{\footnotesize phase clock, PI velocity, Raibert}};
     \node[side, right=of orca, fill=black!5] (safe) {\textbf{Shared safety layer}\\obstacle margin, escape (ORCA)\\turn gate (body command)};
@@ -211,14 +239,19 @@ and its neighbours with their measured velocities. The result is the velocity th
 $t + L$, so it can be requested with a deadline of $L$. If the current command would collide within 0.8\,s
 with a robot, or within 1.5\,s with a static obstacle, the request is urgent: ORCA is solved for the present
 and the command is released at once. A $15^\circ$ keep-right bias breaks symmetric deadlocks.
+Each robot sees the positions and velocities of up to ten neighbours within 4\,m, without noise or delay;
+velocities are estimated from positions with a 0.15\,s low-pass filter.
 
 \subsection{Phase-aware commander}
-A request whose change from the current command exceeds 0.15\,m/s
-(or 0.3\,rad/s) is a manoeuvre. For each manoeuvre the commander queries the capability map for every gait
-phase reachable before the deadline (at most 0.5\,s) and releases the command at the phase with the lowest
-predicted cost, namely peak tilt plus a weight of 50 on the predicted fall probability. Smaller changes,
-urgent requests and changes outside the map's domain are released at once. A new request similar to a pending
-one keeps the pending release time, so the timing is not reset every tick.
+A request whose change from the current command exceeds 0.15\,m/s (or 0.3\,rad/s) is a manoeuvre. A
+non-urgent manoeuvre is held for at most half a gait period (0.18\,s), which is always shorter than its
+deadline $L$. Over that window the commander queries the capability map at 1/64-period steps and releases
+the command at the phase with the lowest predicted cost, namely peak tilt plus a weight of 50 on the
+predicted fall probability. Smaller changes, urgent requests and changes outside the range of the map's
+grid of speeds, directions and sizes are released at once. Every other manoeuvre is timed, including the
+many that occur during walking unlike the settled, straight steps on which the map was measured
+(Section~\ref{sec:map-context} tests the map on exactly these). A new request similar to a pending one
+updates the pending command but keeps its release time, so the timing is not reset every tick.
 
 \subsection{Gait-aware slew limiter}
 Once released, a change is applied through a slew limiter whose rate
@@ -241,6 +274,23 @@ heading error grows from $30^\circ$ to $90^\circ$, so a robot turns before it wa
 towards the formation reference for 2\,s, and to the other side if the robot is still stuck. Each of these
 was added after a failure found in the experiments; Section~\ref{sec:discussion} reports one further fix that
 we tried and rejected.
+
+\subsection{Scope of the safety layer}\label{sec:safety-scope}
+ORCA returns velocities that are collision-free for ideal agents that adopt them at once and keep them.
+A quadruped does neither, and the stack handles the gap heuristically rather than with a guarantee.
+(i) Future positions are predicted by constant-velocity extrapolation over $L$: the robot's own position
+with the command it is executing, its neighbours' with their measured velocities. (ii) The selected
+velocity becomes the active command after the heading controller and the body-command limits (Section~\ref{sec:method}),
+when the commander releases it, at most 0.18\,s after the request; the slew limiter then ramps the gait
+towards it. (iii) The prediction does not model the robot's own tracking error: the lag of the ramp and
+the controller's tracking error enter only through the neighbours' measured velocities and through
+replanning every 0.1\,s. (iv) A release cannot miss its deadline, because the longest hold (0.18\,s) is
+shorter than $L$; the ramp after release can, however, extend past $t+L$. (v) A request is urgent, and
+bypasses both prediction and the hold, when the time to collision of the current command is below 0.8\,s
+with a robot or 1.5\,s with a static obstacle. (vi) The safety layer therefore reduces collision risk but
+does not ensure it: the full system had 16 robot--robot and 1 robot--obstacle contact onsets in 230 runs
+(Section~\ref{sec:safety-totals}).
+The collision avoidance reported here is validated empirically, not proven.
 
 \section{Experimental setup}\label{sec:setup}
 
@@ -270,7 +320,9 @@ lists the scenarios and Table~\ref{tab:configs} the configurations.
 
 \begin{table}[t]
   \centering
-  \caption{Configurations. All share the safety layer of Section~\ref{sec:method}.}
+  \caption{Configurations. All share the safety layer of Section~\ref{sec:method}. The last two are controls:
+  they hold each change for the same window as the full system but release it after a uniformly random wait,
+  or at the phase the map predicts is worst.}
   \label{tab:configs}
   \small
   \begin{tabular}{@{}lcccc@{}}
@@ -283,6 +335,8 @@ lists the scenarios and Table~\ref{tab:configs} the configurations.
     Prediction + timing      & \checkmark & \checkmark & -- & -- \\
     \quad + gait-aware limiter & \checkmark & \checkmark & \checkmark & -- \\
     Full system              & \checkmark & \checkmark & \checkmark & \checkmark \\
+    Full system, random wait (sham) & \checkmark & random & \checkmark & \checkmark \\
+    Full system, worst phase        & \checkmark & worst  & \checkmark & \checkmark \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -291,7 +345,19 @@ The main suite runs all six configurations on the 4- and 8-robot swaps, the 9-ro
 with 20 seeds (480 runs). The scaling suite runs the baseline, prediction only (with queueing) and the full
 system on the 16- and 32-robot swaps and the 16-robot pillar field with 10 seeds (90 runs). The lookahead suite
 varies $L \in \{0.18, 0.36, 0.54, 0.72\}$\,s on the 8-robot swap and the gate (10 seeds, 100 runs). The
-course runs three configurations for teams of 1 and 6 robots with 20 seeds (120 runs).
+course runs three configurations for teams of 1 and 6 robots with 20 seeds (120 runs). The timing-control suite
+runs the baseline, the full system and its two controls on the four main scenarios with 20 seeds (320 runs);
+the mean hold was 0.08--0.09\,s in all three timed configurations.
+
+\subsection{Map validation in context}\label{sec:replay-setup}
+To test the capability map where it is used, we run the full system on the 8- and 16-robot swaps, the
+9-robot pillar field and the gate (5 seeds each) and sample one in four of the manoeuvres the commander
+times, at most 30 per run (488 events). At each sampled request the complete simulation state is saved.
+From it, the same change is released after each of nine waits from 0 to half a gait period, while every
+robot's logged command stream continues as recorded, and the peak tilt of the focal robot over the next
+1.0\,s is measured. Replaying the commander's own choice reproduces the original run exactly in every
+event. For each event this gives a measured tilt at every candidate phase, so the map can be scored on
+absolute error, on how well it ranks the phases, and on the tilt of the phase it would choose.
 
 \subsection{Metrics}
 Three metrics are fixed in advance as primary: urgent avoidance events per robot-minute
@@ -300,19 +366,28 @@ the run, and the closest robot--robot distance. We also report falls (trunk belo
 $60^\circ$), runs not finished within the time limit, contacts and completion time.
 
 \subsection{Statistics}
-Each configuration is compared with the baseline on the same seed. For each metric we
-take the per-seed difference and test it with a two-sided sign-flip permutation test (exact for up to 16
-seeds, 20{,}000 random sign patterns otherwise), with 95\% bootstrap confidence intervals. The 21 primary
-tests (7 scenarios $\times$ 3 metrics, full system against baseline) are corrected together with the Holm
-method. With 10 seeds the smallest attainable corrected $p$-value is about 0.02, which limits what the scaling
-suite can show.
+Comparisons are paired by seed. For each metric we take the per-seed difference and test it with an exact
+two-sided sign-flip permutation test that enumerates all $2^n$ sign patterns ($n$ = number of seeds);
+zero differences are kept and do not change the result, and ties with the observed statistic count as
+extreme. We also report 95\% bootstrap confidence intervals. Three families of tests are corrected
+separately with the Holm method. (A) The 21 primary tests compare the full system with the reactive
+baseline (7 scenarios $\times$ 3 metrics). (B) Twelve tests compare prediction with timing against
+prediction alone on the four main scenarios. (C) The timing controls compare the full system with its
+random-wait and worst-phase versions. With $n = 10$ seeds the smallest possible raw $p$-value is
+$2/2^{10} \approx 0.00195$; Holm multiplies the $k$-th smallest of the 21 primary $p$-values by $22-k$, so
+a 10-seed test ranked first could at best reach $21 \times 0.00195 \approx 0.041$. In our data the 20-seed
+tests rank first and the six significant 10-seed tests rank 10th to 15th, giving a corrected $p$ of
+$12 \times 0.00195 \approx 0.023$ (Table~\ref{tab:primary}). The scaling suite can therefore reach the 5\%
+level but not the 1\% level.
 
 \section{Results}\label{sec:results}
 
-The full system reduces urgent events and tilt wherever robots crowd or obstacles force manoeuvres, and does
-no good in sparse traffic (Fig.~\ref{fig:primary}, Table~\ref{tab:primary}). Of the 21 primary tests, 15 are
-significant after Holm correction: 13 favour the full system and 2, both in the 4-robot swap, favour the
-baseline.
+We report three comparisons. (A) The full system against the reactive baseline measures the value of the
+whole architecture (Fig.~\ref{fig:primary}, Table~\ref{tab:primary}). Of its 21 tests, 15 are significant
+after Holm correction: 13 favour the full system and 2, both in the 4-robot swap, favour the baseline.
+(B) Prediction with timing against prediction alone isolates the commander (Section~\ref{sec:which}). (C) The
+full system against two controls that hold each change for the same window but release it after a random
+wait or at the map's worst phase isolates the phase choice itself (Section~\ref{sec:phase-or-wait}).
 
 \begin{figure}[t]
   \centering
@@ -347,22 +422,116 @@ Swap & 32 & 10 & 64.5 & 50.6 & $-$22\%$^{*}$ & 8.39 & 6.76 & $-$19\%$^{*}$ & 0.5
   \end{tabular}
 \end{table}
 
-\subsection{Which component does the work}
-Prediction alone does not help (Fig.~\ref{fig:ablation}). Against
-the baseline it changes urgent events by $+6\%$ in the 8-robot swap and $+3\%$ in the pillar field, and raises
-99th-percentile tilt by 20\% in the 4-robot swap. Adding phase timing produces most of the gain: urgent events
-fall by 15--16\% and tilt by 12--16\% in the 8-robot swap, the pillars and the gate. The gait-aware limiter adds
-further tilt reduction at the gate ($-15\%$ instead of $-12\%$) but almost none elsewhere. Queueing matters in
-obstructed formations, where it doubles the reduction in urgent events (pillars $-30\%$ instead of $-18\%$,
-gate $-34\%$ instead of $-14\%$) and widens the closest distance by 7--8\%. Phase timing is therefore the
-active ingredient, and queueing is a useful complement only where robots must pass through gaps.
+\subsection{Which component does the work}\label{sec:which}
+Prediction alone does not help (Fig.~\ref{fig:ablation}). Against the baseline it changes urgent events by
+$+6\%$ in the 8-robot swap and $+3\%$ in the pillar field, and raises 99th-percentile tilt by 20\% in the
+4-robot swap. Adding the commander, which holds each non-urgent change and releases it at the predicted best
+phase, produces most of the gain (Table~\ref{tab:timing}): against prediction alone it lowers urgent events
+by 18--20\% in the 8-robot swap and the pillar field and 99th-percentile tilt by 12--23\% in all four
+scenarios. The gait-aware limiter adds further tilt reduction at the gate ($-15\%$ instead of $-12\%$ against
+the baseline) but almost none elsewhere. Queueing matters in obstructed formations, where it doubles the
+reduction in urgent events (pillars $-30\%$ instead of $-18\%$, gate $-34\%$ instead of $-14\%$) and widens
+the closest distance by 7--8\%. The commander combines a bounded hold with a choice of phase;
+Section~\ref{sec:phase-or-wait} separates the two.
+
+\begin{table}[t]
+  \centering
+  \caption{Comparison B: prediction with timing (P+T) against prediction alone (P), means over 20 seeds.
+  $^{*}$\,$p<0.05$, $^{**}$\,$p<0.01$ after Holm correction over these 12 tests. Closest distance changed by
+  $+1$ to $+5\%$, none significant.}
+  \label{tab:timing}
+  \small
+  \begin{tabular}{@{}l rrr rrr@{}}
+    \toprule
+    & \multicolumn{3}{c}{Urgent events / robot-min} & \multicolumn{3}{c}{p99 tilt (deg)} \\
+    \cmidrule(lr){2-4}\cmidrule(l){5-7}
+    Scenario & P & P+T & Change & P & P+T & Change \\
+    \midrule
+    Swap, 4    & 13.6 & 10.8 & $-21\%$ & 7.09 & 5.45 & $-23\%^{**}$ \\
+    Swap, 8    & 31.4 & 25.2 & $-20\%^{**}$ & 7.54 & 6.52 & $-14\%^{*}$ \\
+    Pillars, 9 & 41.5 & 34.0 & $-18\%^{**}$ & 6.97 & 6.03 & $-13\%^{**}$ \\
+    Gate, 6    & 21.6 & 20.9 & $-3\%$ & 5.82 & 5.14 & $-12\%^{**}$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
 \begin{figure}[t]
   \centering
   \includegraphics[width=\textwidth]{figures/fig4_ablation.pdf}
   \caption{Ablation on the main suite (20 seeds). Change relative to the reactive baseline as components are
-  added; lower is better. Prediction alone does not help; phase timing produces most of the gain.}
+  added; lower is better. Prediction alone does not help; adding the commander (hold and phase choice) produces most of the gain.}
   \label{fig:ablation}
+\end{figure}
+
+\subsection{Phase choice or waiting}\label{sec:phase-or-wait}
+The commander's benefit could come from releasing at the best phase or merely from holding the change for a
+fraction of a gait period. The two controls hold for the same mean time (0.08--0.09\,s) and differ only in
+when they release (Fig.~\ref{fig:controls}, Table~\ref{tab:controls}). Urgent events and closest distance do
+not depend on the release phase: none of the 16 tests on these metrics is significant, and the random-wait
+control alone reduces urgent events against the baseline by 27\% in the pillar field and 30\% at the gate.
+The reduction in urgent events therefore comes from prediction and the bounded hold, not from the phase.
+Tilt does depend on it, modestly and with the expected ordering: in every scenario the map's best phase gives
+the lowest 99th-percentile tilt and its worst phase the highest. After Holm correction the best phase beats
+the random wait in the 4-robot swap ($-11\%$) and the worst phase in the 4-robot swap and the pillar field
+($-21\%$, $-8\%$). Pooled over the 80 seed pairs (an exploratory analysis), the best phase lowers p99 tilt by
+5.9\% against the random wait ($p < 10^{-4}$) and the random wait by 4.4\% against the worst phase
+($p = 0.0005$). In the crowded scenarios the phase choice accounts for 11--28\% of the full system's
+reduction in p99 tilt.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/fig7_controls.pdf}
+  \caption{Timing controls (20 seeds). All three configurations are the full system with the same hold;
+  they differ only in when the held change is released. Bars: mean change against the reactive baseline,
+  95\% bootstrap intervals. Off-scale bars (4-robot swap) are labelled with their value.}
+  \label{fig:controls}
+\end{figure}
+
+\begin{table}[t]
+  \centering
+  \caption{Comparison C: the full system (map's best phase) against a random wait from the same window and
+  against the map's worst phase, change in the full system, 20 seeds. $^{*}$\,$p<0.05$, $^{**}$\,$p<0.01$
+  after Holm correction over 24 tests (closest distance included; all its changes are within $\pm4\%$ and
+  not significant).}
+  \label{tab:controls}
+  \small
+  \begin{tabular}{@{}l rr rr@{}}
+    \toprule
+    & \multicolumn{2}{c}{vs random wait} & \multicolumn{2}{c}{vs worst phase} \\
+    \cmidrule(lr){2-3}\cmidrule(l){4-5}
+    Scenario & Urgent & p99 tilt & Urgent & p99 tilt \\
+    \midrule
+    Swap, 4    & $+23\%$ & $-11\%^{*}$ & $-15\%$ & $-21\%^{**}$ \\
+    Swap, 8    & $+9\%$   & $-1\%$       & $+10\%$ & $-5\%$ \\
+    Pillars, 9 & $-3\%$   & $-6\%$       & $-2\%$  & $-8\%^{**}$ \\
+    Gate, 6    & $-5\%$   & $-5\%$       & $-1\%$  & $-7\%$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{The capability map inside the swarm}\label{sec:map-context}
+In the replay experiment (Section~\ref{sec:replay-setup}), 2\% of the 488 events met the conditions under which
+the map was measured, and 92\% followed the previous command change by less than one gait period. In this
+context the map's absolute predictions do not hold (Fig.~\ref{fig:mapctx}a): it under-predicts peak tilt by
+$1.8^\circ$ on average (mean absolute error $2.1^\circ$, $R^2 = -0.99$, no better than the phase-blind map),
+against $R^2 = 0.98$ for isolated steps. Its ranking of phases survives in part. The median rank correlation
+between predicted cost and measured tilt over the nine release times is $+0.27$ (positive in 61\% of events),
+and the phase the map chooses has $0.21^\circ$ less tilt than a random release (95\% CI $0.15$--$0.27^\circ$)
+and $0.37^\circ$ less than its worst phase, which is 35\% of the reduction an oracle choosing the best of the
+nine phases would achieve. The value of the map's choice falls with distance from the calibration conditions
+(Fig.~\ref{fig:mapctx}b): it is $0.95^\circ$ when the previous change was at least one period ago and
+$0.97^\circ$ for the largest changes (map size $\geq 0.5$), but $0.14^\circ$ during rapid command sequences
+and $0.08^\circ$ above 0.4\,m/s. No replayed release led to a fall or to a tilt above $15^\circ$, so fall-risk
+prediction could not be tested in context.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/fig8_map_context.pdf}
+  \caption{The capability map in the context where it is used: 488 swarm events, each replayed at nine release
+  times. (a) Predicted against measured peak tilt over 1\,s; dashed line: perfect prediction. (b) Tilt at the
+  phase the map chooses minus the mean over the nine release times (a random release), by context; mean and
+  95\% bootstrap interval. The map's choice helps most where events resemble its calibration.}
+  \label{fig:mapctx}
 \end{figure}
 
 \subsection{Scaling}
@@ -372,10 +541,11 @@ pillars, by 39\% and 22\%. The gain in closest distance shrinks at 32 robots ($+
 the swarm is near its packing limit.
 
 \subsection{Cost}
-Waiting for a good phase costs time when there is nothing to avoid. In the 4-robot swap the
+Planning ahead and holding commands cost time and, in sparse traffic, safety margin. In the 4-robot swap the
 full system is 6.8\% slower, has twice the urgent events of the baseline (5.2 against 10.9 per robot-minute)
 and a 2\% smaller closest distance. In the 8-robot swap it is 2.7\% slower; at the gate the completion time is
-unchanged.
+unchanged. The random-wait control has the same cost (completion times within 0.6\% of the full system, not
+significant), so the cost belongs to the hold, not to the phase choice.
 
 \subsection{Lookahead}
 Looking further ahead lets more changes be planned (Fig.~\ref{fig:lookahead}): the share
@@ -409,20 +579,33 @@ urgent events (7.4 to 10.4 per minute), consistent with the 4-robot swap.
   \label{fig:course}
 \end{figure}
 
-\subsection{Safety totals}
-Across all 230 full-system runs in the final configuration there were no falls; the
-baseline fell twice in 170 runs (once in the 16-robot pillar field and once on the course). Runs that did not
-finish in time were rare in every configuration: one for the full system (course), one for queueing only and
-two for prediction only.
+\subsection{Safety totals}\label{sec:safety-totals}
+Across all 230 full-system runs in the final configuration there were no falls; the baseline fell twice in
+170 runs (once in the 16-robot pillar field and once on the course). The full system had 16 robot--robot and
+1 robot--obstacle contact onsets in those runs, against 28 and 4 for the baseline: contacts are rarer but
+not eliminated (Section~\ref{sec:safety-scope}). Runs that did not finish in time were rare in every
+configuration: one for the full system (course), one for queueing only, two for prediction only and one for
+the worst-phase control.
 
 \section{Discussion and limitations}\label{sec:discussion}
 
 \subsection{When it helps}
-Phase timing pays off when a robot has many manoeuvres to make and enough warning to
-wait for a good phase. Crowds and clutter provide both; sparse traffic does not. In the 4-robot swap the few
-manoeuvres are mostly avoidable by acting slightly earlier, and any waiting only delays them, which shows up as
-more urgent events later. A practical system should enable timing only above a traffic-density threshold; we
-have not tested such a switch.
+Planning ahead and holding commands pay off when a robot has many manoeuvres to make and enough warning to
+plan them. Crowds and clutter provide both; sparse traffic does not. In the 4-robot swap the few manoeuvres are
+mostly avoidable by acting slightly earlier, and any hold only delays them, which shows up as more urgent
+events later; the random-wait control shows the same cost, so it belongs to the hold rather than to the phase
+choice. A practical system should enable the hold only above a traffic-density threshold; we have not tested
+such a switch.
+
+\subsection{What the phase adds}
+The controls separate two effects that the commander combines. Holding a non-urgent change for a fraction of a
+gait period, with ORCA planning one period ahead, produces the reduction in urgent events and most of the
+reduction in tilt; we have not isolated why the hold helps. Releasing at the phase the map predicts is safest
+adds a smaller, consistent reduction in tilt (about 4--6\%), and releasing at the worst phase costs about as
+much, so the phase matters to body stability but not to how often robots must swerve. The replay explains why
+the phase effect is small: the map was measured on isolated steps from settled walking, and its ranking holds
+well only for events that resemble those steps, which are a minority in a swarm. A map measured on command
+sequences, with the time since the previous change as an additional input, is the natural next step.
 
 \subsection{Robustness fixes and a rejected one}
 The shared safety layer was not designed in advance. Each part
@@ -435,22 +618,28 @@ and gives late robots right of way. It removed every fall, but runs that did not
 detours. We report it as a negative result; the code keeps it as an option.
 
 \subsection{Limitations}
-(i) All results are in simulation, with one robot model and one trot controller; the
-capability map must be re-measured for another controller, and the effect size on hardware is unknown.
-(ii) The capability map is built from single command changes in settled walking, and most swarm commands fall
-outside that domain, which is why prediction and a shaped limiter are needed alongside timing. (iii) Robots
-share positions and velocities perfectly, without noise or delay. (iv) The scaling suite has only 10 seeds,
-which limits the attainable significance. (v) Completion time rises by up to 7\% in sparse scenarios.
+(i) All results are in simulation, with one robot model and one trot controller; the capability map must be
+re-measured for another controller, and the effect size on hardware is unknown. (ii) The capability map is
+measured on single command changes in settled walking; inside the swarm its absolute predictions do not hold
+and its phase ranking holds only in part (Section~\ref{sec:map-context}). (iii) Collision avoidance is
+validated empirically, not guaranteed: the prediction ignores the robot's own tracking error and contacts
+still occur (Section~\ref{sec:safety-scope}). (iv) Robots share positions and velocities perfectly, without
+noise or delay. (v) The scaling suite has only 10 seeds, which limits the attainable significance, and the
+pooled analysis of the timing controls is exploratory. (vi) Completion time rises by up to 7\% in sparse
+scenarios. (vii) Falls were too rare to test the map's fall-risk predictions in context.
 
 \section{Conclusion}\label{sec:conclusion}
 
-A quadruped's tolerance of a velocity change depends on where in the gait cycle the change arrives, and a swarm
-layer can use this. Planning ORCA one gait period ahead and releasing each change at the predicted best phase cut
-urgent avoidance events by 22--39\% and 99th-percentile tilt by 19--24\% in crowded and obstructed scenarios with
-6 to 32 simulated Go1 robots, with no falls in 230 runs. Prediction without timing gave no consistent benefit.
-Next steps are hardware experiments on Go1 robots, a second low-level controller (a learned policy) to test
-whether the capability map transfers, sensing noise and delay, and an automatic switch that disables timing in
-sparse traffic.
+A quadruped's tolerance of a velocity change depends on where in the gait cycle the change arrives. A swarm
+layer that plans ORCA one gait period ahead, holds each non-urgent change for at most half a period and
+releases it at the predicted best phase cut urgent avoidance events by 22--39\% and 99th-percentile tilt by
+19--24\% against a reactive baseline in crowded and obstructed scenarios with 6 to 32 simulated Go1 robots,
+with no falls in 230 runs against two in 170 for the baseline. Controls show that planning ahead and the
+bounded hold account for the reduction in urgent events, and that the phase choice adds a smaller, consistent
+reduction in tilt. A capability map measured on isolated steps keeps only part of its phase ranking in the rapid
+command sequences of a swarm. Next steps are a map measured on command sequences, hardware experiments on Go1
+robots, a second low-level controller (a learned policy), sensing noise and delay, and an automatic switch that
+disables the hold in sparse traffic.
 
 \backmatter
 
@@ -466,16 +655,17 @@ The author did not receive support from any organization for the submitted work.
 The author has no relevant financial or non-financial interests to disclose.
 
 \bmhead{Use of AI-assisted tools}
-Claude (Anthropic) was used to assist with software development, experiment scripting, data analysis and
-drafting of the manuscript. The author conceived and directed the study, chose the methods and parameters,
-ran the experiments, and reviewed and verified all code, results and text. The author takes full
-responsibility for the content of this manuscript.
+Claude (Anthropic) was used as an assistant for software development, experiment scripting, statistical
+analysis, drafting and editing of the manuscript text, and searching and checking references. The author
+conceived and directed the study, chose the methods and parameters, ran the experiments, interpreted the
+results, and reviewed and verified all code, results and text. The author takes full responsibility for the
+content of this manuscript.
 
 \bmhead{Data and code availability}
 The simulation code, configuration files, raw results and the scripts that produce every table and figure
-are publicly available at \url{https://github.com/Bishwaswarup/robot} (MIT licence). Table~\ref{tab:primary}
-is generated by \texttt{scripts/paper\_tables.py} and the figures by \texttt{scripts/paper\_figures.py} from
-the raw results in the repository.
+are publicly available at \url{https://github.com/Bishwaswarup/robot} (MIT licence). Tables~\ref{tab:primary},
+\ref{tab:timing} and~\ref{tab:controls} are generated by \texttt{scripts/paper\_tables.py} and the figures by
+\texttt{scripts/paper\_figures.py} from the raw results in the repository.
 
 \bmhead{Author contributions}
 B.N. conceived the study, developed the software, ran the experiments, analysed the results and wrote the

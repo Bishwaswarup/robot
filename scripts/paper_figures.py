@@ -2,7 +2,8 @@
 
 Run:  python scripts/paper_figures.py                 (reads results/paper/*_robust, results/course, data/)
       python scripts/paper_figures.py --course-paths results/course/course_paths.json
-Out:  paper/figures/fig2_phase.pdf, fig3_primary.pdf, fig4_ablation.pdf, fig5_lookahead.pdf, fig6_course.pdf
+Out:  paper/figures/fig2_phase.pdf, fig3_primary.pdf, fig4_ablation.pdf, fig5_lookahead.pdf, fig6_course.pdf,
+      fig7_controls.pdf (results/paper/timing_robust), fig8_map_context.pdf (results/map_validation)
       (fig2_phase is Fig. 1 of the paper; Fig. 2, the stack diagram, is drawn in TikZ in the LaTeX source.)
 """
 import os
@@ -183,6 +184,95 @@ def fig_ablation(main, out):
     save(fig, out, "fig4_ablation")
 
 
+def _boot(x, n=4000, seed=0):
+    x = np.asarray(x, float)
+    x = x[np.isfinite(x)]
+    bs = np.random.default_rng(seed).choice(x, (n, len(x))).mean(1)
+    return x.mean(), np.percentile(bs, 2.5), np.percentile(bs, 97.5)
+
+
+# ---------------------------------------------------------------- Fig. 7: timing controls
+def fig_controls(tim, out):
+    """Change vs baseline (%, mean of per-seed paired differences, 95% bootstrap CI) for the three timed
+    configurations that differ ONLY in when the held change is released."""
+    cfgs = [(FULL.replace("phase+", "worst+"), "Worst phase (map)", "#bdbdbd"),
+            (FULL.replace("phase+", "sham+"), "Random wait (sham)", "#7f7f7f"),
+            (FULL, "Best phase (map) = full system", BLUE)]
+    scen = [("swap4", "Swap, 4"), ("swap8", "Swap, 8"), ("formation9_pillars", "Pillars, 9"),
+            ("formation6_gate", "Gate, 6")]
+    fig, ax = plt.subplots(1, 2, figsize=(W, 2.5), gridspec_kw=dict(wspace=0.22))
+    for a, (m, title) in zip(ax, [("urgent_per_robot_min", "Urgent events per robot-minute"),
+                                  ("p99_tilt", "99th-percentile tilt")]):
+        x = np.arange(len(scen))
+        w = 0.26
+        for k, (cfg, lab, col) in enumerate(cfgs):
+            for xi, (sc, _) in zip(x, scen):
+                b, c = paired(tim, sc, cfg, m)
+                mu, lo, hi = _boot(100 * (c.values - b.values) / b.mean())
+                top = 60 if m == "urgent_per_robot_min" else 30
+                a.bar(xi + (k - 1) * w, min(mu, top), w * 0.9, color=col, edgecolor="none",
+                      label=lab if xi == 0 else None)
+                if hi <= top:
+                    a.errorbar(xi + (k - 1) * w, mu, yerr=[[mu - lo], [hi - mu]], color=DARK, lw=0.7, capsize=1.5)
+                else:                                   # off-scale (4-robot swap): print the value instead
+                    a.text(xi + (k - 1) * w, top + 1, f"+{mu:.0f}", ha="center", va="bottom", fontsize=6,
+                           rotation=90, color=DARK)
+        a.axhline(0, color=DARK, lw=0.6)
+        a.set_ylim(-52, 78) if m == "urgent_per_robot_min" else a.set_ylim(-30, 34)
+        a.set_xticks(x)
+        a.set_xticklabels([l for _, l in scen])
+        a.set_ylabel("change vs reactive baseline (%)")
+        a.set_title(title + " (lower = better)")
+        a.grid(axis="y", color=LIGHT, lw=0.5)
+        a.set_axisbelow(True)
+    ax[0].legend(loc="upper center", bbox_to_anchor=(1.1, -0.13), ncol=3, frameon=False, handlelength=1.2)
+    save(fig, out, "fig7_controls")
+
+
+# ---------------------------------------------------------------- Fig. 8: map inside the swarm
+def fig_map_context(ev, op, out):
+    fig, ax = plt.subplots(1, 2, figsize=(W, 3.0), gridspec_kw=dict(width_ratios=[1, 1.15], wspace=1.05))
+    a = ax[0]
+    a.scatter(op.pred_tilt, op.meas_tilt, s=2, color=BLUE, alpha=0.15, lw=0)
+    lim = [0, max(op.meas_tilt.max(), op.pred_tilt.max()) + 0.5]
+    a.plot(lim, lim, color=DARK, lw=0.7, ls="--")
+    a.set_xlim(lim); a.set_ylim(lim)
+    a.set_xlabel("predicted peak tilt (deg)")
+    a.set_ylabel("measured peak tilt (deg)")
+    e = op.pred_tilt - op.meas_tilt
+    a.set_title("(a) Absolute prediction", loc="left")
+    a.text(0.04, 0.96, f"bias {e.mean():+.1f}$^\\circ$\nMAE {e.abs().mean():.1f}$^\\circ$", transform=a.transAxes,
+           va="top", fontsize=7)
+    a = ax[1]
+    comb = (ev.d_planar >= .15) & (ev.d_yaw >= .15)
+    strata = [("all events", ev.index == ev.index),
+              ("previous change < 1 period ago", ev.since_release < 0.36),
+              ("previous change $\\geq$ 1 period ago", ev.since_release >= 0.36),
+              ("single-axis change", ~comb), ("combined planar + yaw", comb),
+              ("speed $\\geq$ 0.4 m/s", ev.speed >= 0.4), ("speed 0.2-0.4 m/s", (ev.speed >= .2) & (ev.speed < .4)),
+              ("speed < 0.2 m/s", ev.speed < 0.2),
+              ("change 0.2-0.3", ev["size"] < 0.3), ("change 0.3-0.5", (ev["size"] >= .3) & (ev["size"] < .5)),
+              ("change $\\geq$ 0.5", ev["size"] >= 0.5)]
+    y = np.arange(len(strata))[::-1]
+    for yi, (lab, mk) in zip(y, strata):
+        sub = ev[mk]
+        mu, lo, hi = _boot(sub.tilt_mapbest - sub.tilt_random)
+        a.errorbar(mu, yi, xerr=[[mu - lo], [hi - mu]], fmt="o", ms=3.2, color=BLUE if yi == y[0] else DARK,
+                   lw=0.8, capsize=1.5)
+        a.text(0.25, yi, f"n={len(sub)}", va="center", fontsize=6.5, color=GREY)
+    for yb in (y[0] - 0.5, y[2] - 0.5, y[4] - 0.5, y[7] - 0.5):    # group separators
+        a.axhline(yb, color=LIGHT, lw=0.6)
+    a.axvline(0, color=DARK, lw=0.6)
+    a.set_yticks(y)
+    a.set_yticklabels([l for l, _ in strata])
+    a.set_xlim(-1.4, 0.45)
+    a.set_xlabel("tilt at map's phase $-$ random wait (deg)")
+    a.set_title("(b) Value of the map's phase choice", loc="left")
+    a.grid(axis="x", color=LIGHT, lw=0.5)
+    a.set_axisbelow(True)
+    save(fig, out, "fig8_map_context")
+
+
 # ---------------------------------------------------------------- Fig. 5: lookahead
 def fig_lookahead(look, out):
     Ls = [0.18, 0.36, 0.54, 0.72]
@@ -258,6 +348,12 @@ def main():
     fig_primary(main_, scal, a.out)
     fig_ablation(main_, a.out)
     fig_lookahead(look, a.out)
+    tim = os.path.join(P, "timing" + a.suffix, "swarm_eval.csv")
+    if os.path.exists(tim):
+        fig_controls(pd.read_csv(tim), a.out)
+    mv = os.path.join(ROOT, "results", "map_validation")
+    if os.path.exists(os.path.join(mv, "events.csv")):
+        fig_map_context(pd.read_csv(os.path.join(mv, "events.csv")), pd.read_csv(os.path.join(mv, "options.csv")), a.out)
     if os.path.exists(a.course_paths):
         fig_course(a.course_paths, a.out)
     else:

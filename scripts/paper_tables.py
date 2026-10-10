@@ -55,6 +55,51 @@ def holm(p):
     return out
 
 
+def family(d, pairs, scenarios):
+    """Paired tests of config x against config y (same seed) on the primary metrics, Holm within the family."""
+    rows = []
+    for sc in scenarios:
+        g = d[d.scenario == sc]
+        for (x, xl), (y, yl) in pairs:
+            A = g[g.config == x].set_index("seed").sort_index()
+            B = g[g.config == y].set_index("seed").sort_index()
+            seeds = A.index.intersection(B.index)
+            if not len(seeds):
+                continue
+            for m, label, good in PRIMARY:
+                diff = (A.loc[seeds, m] - B.loc[seeds, m]).values
+                rows.append(dict(scenario=sc, pair=f"{xl} - {yl}", metric=label, seeds=len(seeds),
+                                 x=A.loc[seeds, m].mean(), y=B.loc[seeds, m].mean(), diff=diff.mean(),
+                                 rel=100 * diff.mean() / B.loc[seeds, m].mean(), p=signflip_p(diff),
+                                 better=bool(np.sign(diff.mean()) == good)))
+    t = pd.DataFrame(rows)
+    t["p_holm"] = holm(t.p)
+    return t
+
+
+def pooled(d, x, y, scenarios, metric):
+    """Exploratory: per-seed relative differences pooled over scenarios (Monte Carlo sign-flip)."""
+    r = []
+    for sc in scenarios:
+        g = d[d.scenario == sc]
+        A = g[g.config == x].set_index("seed").sort_index()[metric]
+        B = g[g.config == y].set_index("seed").sort_index()[metric]
+        s = A.index.intersection(B.index)
+        r += list(((A[s] - B[s]) / B[s].mean()).values)
+    r = np.asarray(r)
+    return 100 * r.mean(), signflip_p(r), len(r)
+
+
+def family_md(t, title):
+    L = ["", f"## {title}", "", f"Holm over the {len(t)} tests of this family.", "",
+         "| scenario | pair | metric | seeds | x | y | change | p (Holm) |", "|---|---|---|---|---|---|---|---|"]
+    for r in t.itertuples():
+        star = "**" if r.p_holm < 0.01 else ("*" if r.p_holm < 0.05 else "")
+        L.append(f"| {r.scenario} | {r.pair} | {r.metric} | {r.seeds} | {r.x:.3g} | {r.y:.3g} | {r.rel:+.0f}% | "
+                 f"{r.p_holm:.4f}{star} |")
+    return L
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--suffix", default="_robust")
@@ -115,6 +160,52 @@ def main():
             L.append(f"| {tm} | {cfg} | {len(g)} | {int(g.falls.sum())} | {int((g.success == 0).sum())} | "
                      f"{g.time.mean():.1f} | {g.p99_tilt.mean():.2f} | {g.max_tilt.max():.1f} | "
                      f"{g.min_clear_obstacle.min():.2f} | {g.urgent_per_robot_min.mean():.1f} |")
+    # (B) contribution of phase timing: prediction + timing vs prediction alone (main suite)
+    MAIN4 = ["swap4", "swap8", "formation9_pillars", "formation6_gate"]
+    main_ = d[d.suite == "main"]
+    tb = family(main_, [(("predictive:phase+limiter", "pred+timing"), ("predictive:limiter", "pred"))], MAIN4)
+    tb.to_csv(os.path.join(P, "family_B_timing.csv"), index=False)
+    L += family_md(tb, "Family B: prediction + timing vs prediction alone (main suite)")
+    # (C) timing controls: is it the phase or the wait?
+    tf = os.path.join(P, "timing" + a.suffix, "swarm_eval.csv")
+    if os.path.exists(tf):
+        q = pd.read_csv(tf)
+        F, S, W = FULL, FULL.replace("phase+", "sham+"), FULL.replace("phase+", "worst+")
+        tc = family(q, [((F, "full"), (S, "sham")), ((F, "full"), (W, "worst"))], MAIN4)
+        tc.to_csv(os.path.join(P, "family_C_controls.csv"), index=False)
+        L += family_md(tc, "Family C: full system vs random wait (sham) and worst phase (timing suite)")
+        L += ["", "Exploratory, pooled over seeds and scenarios (relative per-seed differences; not part of a "
+                  "corrected family):", "", "| pair | scenarios | metric | change | p | n |", "|---|---|---|---|---|---|"]
+        for (x, xl), (y, yl) in [((F, "full"), (S, "sham")), ((F, "full"), (W, "worst")), ((S, "sham"), (W, "worst")),
+                                 ((S, "sham"), (BASE, "base"))]:
+            for scs, lab in ((MAIN4, "all 4"), (MAIN4[1:], "crowded 3")):
+                for m, ml, _ in PRIMARY:
+                    mu, pp, n = pooled(q, x, y, scs, m)
+                    L.append(f"| {xl} - {yl} | {lab} | {ml} | {mu:+.1f}% | {pp:.4f} | {n} |")
+        L += ["", "| scenario | config | mean hold (s) |", "|---|---|---|"]
+        for (sc, cfg), g in q.groupby(["scenario", "config"], sort=False):
+            L.append(f"| {sc} | {cfg} | {g.mean_wait.mean():.3f} |")
+    # contacts (onsets) and falls of the full system and the baseline over every final suite
+    L += ["", "## Contacts and falls, full system vs baseline (all final suites + course)", "",
+          "| config | runs | falls | robot-robot contact onsets | robot-obstacle contact onsets |", "|---|---|---|---|---|"]
+    tot = {}
+    for suite in ("main", "scaling", "lookahead"):
+        f = os.path.join(P, suite + a.suffix, "swarm_eval.csv")
+        if os.path.exists(f):
+            q = pd.read_csv(f)
+            for key, sel in (("full", q.config.str.endswith("phase+gaslc_equal:q")), ("baseline", q.config == BASE)):
+                g = q[sel]
+                t_ = tot.setdefault(key, [0, 0, 0, 0])
+                t_[0] += len(g); t_[1] += int(g.falls.sum()); t_[2] += int(g.rr_contacts.sum()); t_[3] += int(g.ro_contacts.sum())
+    if os.path.exists(a.course):
+        q = pd.read_csv(a.course)
+        for key, cfg in (("full", FULL), ("baseline", BASE)):
+            g = q[q.config == cfg]
+            t_ = tot.setdefault(key, [0, 0, 0, 0])
+            t_[0] += len(g); t_[1] += int(g.falls.sum()); t_[2] += int(g.rr_contacts.sum())
+            t_[3] += int(g.obstacle_contacts.sum() + g.mover_contacts.sum())
+    for key, (n, fa, rr, ro) in tot.items():
+        L.append(f"| {key} | {n} | {fa} | {rr} | {ro} |")
     out = os.path.join(P, "paper_tables.md")
     open(out, "w").write("\n".join(L) + "\n")
     print("\n".join(L))
