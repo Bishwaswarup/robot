@@ -508,3 +508,19 @@ still > 1 m from its slot (late robots get right of way); fallen robots neutral.
 12; baseline f16 seed 1 fall gone; course full 1); only pred:limiter:q f16 seed 1 still fails.
 Swap8 spot check unchanged (15.0-15.8 s, 0 falls). NOTE: --robust already includes static safety, so the
 'obstacles' suite duplicates main/scaling scenarios -> not needed in the final run.
+
+### v2 escape REJECTED; final paper stack = --robust v1 (2026-10-10)
+v2 (progress-based stall detection + lag priority) results: 0 falls everywhere, but timeouts up:
+main 16/480 (v1: 1), scaling 6/90 (v1: 2), lookahead 2/100 (v1: 0), course 4/120 (v1: 1).
+Diagnosis (pillars9 full seed 1, reproduced): progress-EMA fires during normal avoidance (ORCA
+deflections) -> repeated 75-deg detours pushed a front robot round the outside of a pillar; it then had
+to cut back into the settled 3x3 block, where lag priority did not open a gap (1.4 m spacing, needs 1.52)
+-> wandered until timeout. Decision: revert to v1 behaviour. Code keeps both: escape=1 (v1, used),
+escape=2 + lag_priority=1 (rejected, documented). Verified the code reproduces main_robust_v1 exactly
+(gate full s0, pillars9 full s1, swap8 base s3; pillars9 base s0 within 0.1 s - float drift).
+Results dirs renamed on the Mac: final = results/paper/{main,lookahead,scaling}_robust, results/course;
+rejected v2 = *_robust_v2_rejected; obstacles suite (redundant under --robust) = obstacles_robust.
+FINAL numbers (scripts/paper_tables.py -> results/paper/paper_tables.md): Holm over 21 primary tests,
+15 significant, 13 favour the full system; the 2 against are swap4 (sparse: urgent +109%, min dist -2%).
+Falls: full system 0 in all suites; baseline 1 (pillars16). Not finished: 1 (reactive:q pillars9),
+2 (pred:limiter:q pillars16), course full 1/20. Exact sign-flip with 10 seeds -> min Holm p 0.023.

@@ -31,6 +31,7 @@ The model is looked up at `./mujoco_menagerie`; override with `MENAGERIE_PATH=/p
 | `python scripts/push_envelope.py` | Measure the push-capability envelope J_max(direction, phase, speed) by bisection (`--quick` ≈ 2 min) |
 | `python scripts/swarm_eval.py` | Swarm test: 4 scenarios × configs `layer:strategy[:q]` (reactive/predictive, commander strategy, bottleneck queueing) |
 | `python scripts/course_eval.py --seeds 20 --speed 0.45` | Obstacle course: team 1 and 6, reactive vs. predictive, section times (`--quick`) |
+| `python scripts/paper_tables.py` | Paper tables from the final `--robust` runs: primary metrics with Holm correction, safety totals, lookahead, course → `results/paper/paper_tables.md` |
 | `python scripts/paper_runs.py` | All paper swarm experiments: main ablation (20 seeds), lookahead sweep, scaling to 16/32 robots + paired stats (`--quick` ≈ 15 min); `--suites obstacles` re-runs the obstacle scenarios with static-obstacle safety; `--robust` adds the turn gate + local-minimum escape for every robot (results in `results/paper/<suite>_robust`) |
 | `python scripts/swarm_stats.py <csv>` | Paired statistics (bootstrap CI, permutation p) vs. baseline |
 | `python scripts/commander_eval.py` | Closed-loop test of phase-aware command timing vs. immediate release / slew limiter (`--quick` ≈ 1 min) |

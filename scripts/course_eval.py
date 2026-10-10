@@ -67,7 +67,7 @@ def run(job, on_step=None):
     cache = {}
     coms = [make_commander(c, strategy, cmap, env, cache) for c in ctrls]
     agents = [SwarmAgent(radius=R_ROBOT, tau_obs=job.get("tau_obs", 2.0), turn_gate=bool(job.get("turn_gate", 0)),
-                         escape=bool(job.get("escape", 0)))
+                         escape=int(job.get("escape", 0)))
               for _ in range(N)]
     trunk = [m.body(f"go1_{i}/trunk").id for i in range(N)]
     root_of = np.array([m.body_rootid[m.geom_bodyid[g]] for g in range(m.ngeom)])
@@ -113,7 +113,7 @@ def run(job, on_step=None):
             dyn_obs = static + [(p, mv.r) for (p, _), mv in zip(mstate, movers)]
             heading = plan.heading_at(t)
             yaws = [c.yaw() for c in ctrls]
-            if job.get("escape"):                         # slot errors for lag priority
+            if job.get("lag_priority"):                   # slot errors for lag priority
                 lam_all = plan.team_scale(t) if N > 1 else 1.0
                 errs = np.array([np.linalg.norm(plan.slot(j, t, lam_all)[0] - pos[j]) for j in range(N)])
                 errs[fallen] = 0.7                       # neutral: fallen robots cannot yield
@@ -130,7 +130,7 @@ def run(job, on_step=None):
                 nbs = [(pos[j], vel[j] if not fallen[j] else np.zeros(2), R_ROBOT) for j in range(N) if j != i]
                 if queue:
                     nbs = queue_responsibility(pos[i], plan.heading_s(plan.progress(pos[i])), nbs, lam < 0.6)
-                if job.get("escape"):
+                if job.get("lag_priority"):
                     nbs = lag_priority(errs[i], [errs[j] for j in range(N) if j != i], nbs)
                 nbs = nbs + mover_nbs
                 Rz = np.array([[np.cos(yaws[i]), -np.sin(yaws[i])], [np.sin(yaws[i]), np.cos(yaws[i])]])

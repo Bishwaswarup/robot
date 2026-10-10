@@ -86,6 +86,7 @@ def parse_lookahead(cfg, default):
 
 STATIC_SAFETY = dict(static_margin=0.1, tau_obs=2.0, static_ttc=1.5)   # same as course_eval
 ROBUST = dict(STATIC_SAFETY, turn_gate=1, escape=1)    # + body-command envelope + local-minimum escape
+# (escape=2 and lag_priority=1 were tried on top and REJECTED: more timeouts - see research notes)
 
 
 def run(job):
@@ -111,7 +112,7 @@ def run(job):
     margin = job.get("static_margin", 0.0)
     obst = [(q, r + margin) for q, r in sc["obstacles"]]
     static_ttc = job.get("static_ttc") or job["urgent_ttc"]
-    agents = [SwarmAgent(radius=R_ROBOT, turn_gate=bool(job.get("turn_gate", 0)), escape=bool(job.get("escape", 0)),
+    agents = [SwarmAgent(radius=R_ROBOT, turn_gate=bool(job.get("turn_gate", 0)), escape=int(job.get("escape", 0)),
                          **({"tau_obs": job["tau_obs"]} if job.get("tau_obs") else {}))
               for _ in range(N)]
     trunk = [m.body(f"go1_{i}/trunk").id for i in range(N)]
@@ -143,7 +144,7 @@ def run(job):
         pos = np.array([d.xpos[b][:2] for b in trunk])
         if k % tick == 0:
             yaws = [c.yaw() for c in ctrls]
-            if job.get("escape"):                         # slot/goal errors for lag priority
+            if job.get("lag_priority"):                   # slot/goal errors for lag priority
                 if sc["plan"] is not None:
                     errs = np.array([np.linalg.norm(sc["plan"].slot(j, t, elastic_scale(pos[j], sc["plan"].heading,
                                      sc["obstacles"]) if job.get("elastic", 1) else 1.0)[0] - pos[j]) for j in range(N)])
@@ -170,7 +171,7 @@ def run(job):
                 nbs = [(pos[j], vel[j] if not fallen[j] else np.zeros(2), R_ROBOT) for j in range(N) if j != i]
                 if queue:
                     nbs = queue_responsibility(pos[i], heading, nbs, in_bn)
-                if job.get("escape"):
+                if job.get("lag_priority"):
                     nbs = lag_priority(errs[i], [errs[j] for j in range(N) if j != i], nbs)
                 applied = ctrls[i].cmd_target
                 Rz = np.array([[np.cos(yaws[i]), -np.sin(yaws[i])], [np.sin(yaws[i]), np.cos(yaws[i])]])

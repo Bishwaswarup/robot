@@ -25,7 +25,7 @@ def wrap(a):
 class SwarmAgent:
     def __init__(self, radius=0.38, v_max=0.6, tau=2.0, tau_obs=1.0, dt=0.1, sense_radius=4.0,
                  max_neighbours=10, keep_right_deg=15.0, k_heading=2.0, w_max=1.2, vy_max=0.35,
-                 turn_gate=False, escape=False):
+                 turn_gate=False, escape=0):
         self.r, self.v_max, self.tau, self.tau_obs, self.dt = radius, v_max, tau, tau_obs, dt
         self.sense_radius, self.max_nb = sense_radius, max_neighbours
         self.keep_right = np.radians(keep_right_deg)
@@ -63,10 +63,17 @@ class SwarmAgent:
         v = orca_velocity(p, self.v_prev, self.r, v_pref, self.v_max, nb, ob,
                           self.tau, self.tau_obs, self.dt)
         if self.escape:
-            # stalled = little PROGRESS along the preferred direction over ~1 s (an EMA of
-            # v . pref_hat), not just low speed: a robot jittering in front of an obstacle counts
-            self.progress += (float(v @ pref_hat) - self.progress) * self.dt / 1.0
-            stalled = pref_speed > 0.3 and self.progress < 0.05
+            if self.escape == 2:
+                # mode 2 (tested, NOT used): stalled = little PROGRESS along the preferred direction
+                # (EMA of v . pref_hat over ~1 s). Fires during normal avoidance too and made
+                # robots wander -> more timeouts (main suite 16 vs 1). Kept for the record.
+                self.progress += (float(v @ pref_hat) - self.progress) * self.dt / 1.0
+                stalled = pref_speed > 0.3 and self.progress < 0.05
+                side_dir = pref_hat
+            else:
+                # mode 1 (used): stalled = ORCA output < 0.05 m/s while wanting > 0.15 m/s
+                stalled = np.linalg.norm(v) < 0.05 and np.linalg.norm(v_pref) > 0.15
+                side_dir = v_pref
             self.stall_t = self.stall_t + self.dt if stalled else 0.0
             if self.detour_t <= 0 and not stalled:
                 self.n_detours = 0
@@ -74,10 +81,11 @@ class SwarmAgent:
                 side = 1.0
                 if self.escape_to is not None:
                     to = np.asarray(self.escape_to, float) - p
-                    side = 1.0 if pref_hat[0] * to[1] - pref_hat[1] * to[0] >= 0 else -1.0
+                    side = 1.0 if side_dir[0] * to[1] - side_dir[1] * to[0] >= 0 else -1.0
                 self.detour_side = side if self.n_detours % 2 == 0 else -side
                 self.detour_t, self.stall_t = 2.0, 0.0
-                self.progress = 0.3                                   # give the detour time to work
+                if self.escape == 2:
+                    self.progress = 0.3
                 self.n_detours += 1
         self.v_prev = v
         return v
