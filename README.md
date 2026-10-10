@@ -26,7 +26,7 @@ controller on a simulated Unitree Go1 and uses it in a decentralized swarm:
 Every robot runs the same local rules; there is no central planner.
 
 > **Paper:** *Gait-Phase-Aware Command Timing for Decentralized Quadruped Swarms*, Bishwaswarup Nayak
-> (Indian Institute of Science), preprint, 2026. LaTeX source and figures are in [`paper/`](paper/).
+> (Indian Institute of Science), preprint, 2026. [PDF](paper/Nayak_GaitPhaseAware_QuadrupedSwarms.pdf) · LaTeX source in [`paper/`](paper/).
 > How to cite: [below](#citation).
 
 ## Results at a glance
@@ -86,7 +86,7 @@ phase at which it is released; (b) largest survivable push, relative to the best
 <details>
 <summary><b>Fig. 2 – Control stack</b></summary>
 
-Drawn in TikZ inside the paper ([`paper/body.tex`](paper/body.tex)): predictive ORCA → phase-aware commander →
+Drawn in TikZ inside the paper ([`paper/main.tex`](paper/main.tex)): predictive ORCA → phase-aware commander →
 gait-aware slew limiter → Bezier trot controller, with the urgent bypass.
 </details>
 
@@ -217,7 +217,7 @@ data/              capability map and push envelope (.npz)
 examples/          viewer demos, video recording
 scripts/           experiments, statistics, tables, figures, media
 results/           raw CSVs of the paper runs
-paper/             LaTeX source (main.tex, Springer main_sn.tex), figures, bibliography
+paper/             LaTeX source (Springer Nature sn-jnl: main.tex), figures, compiled PDF
 docs/              research notes, docs/media (README GIFs and images)
 tests/             pytest
 ```

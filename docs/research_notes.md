@@ -532,7 +532,7 @@ Systems now; Autonomous Robots if hardware is added. arXiv dropped (endorsement 
 come from the final --robust v1 runs (results/paper/{main,lookahead,scaling}_robust, results/course).
 Venue changed: JIRS dropped (fully OA, APC EUR 2,590, no IISc deal); Autonomous Robots wants hardware.
 Final target: International Journal of Intelligent Robotics and Applications (IJIRA, Springer, hybrid,
-free subscription route, In Review). LaTeX source in paper/ (main.tex article, main_sn.tex sn-jnl).
+free subscription route, In Review). LaTeX source in paper/main.tex (sn-jnl, sn-mathphys-num; single file, cls/bst copied from the SOLAR_SAIL springer folder). Old article/main_sn/body/abstract/declarations split and Claude-Doc exports removed.
 
 ### Public release (2026-10-10)
 Repo github.com/Bishwaswarup/robot is public (MIT). Data availability in paper + doc changed to "publicly

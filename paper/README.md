@@ -1,15 +1,16 @@
 # Paper source
 
-`main.tex` builds the manuscript in a neutral single-column layout with any TeX Live:
+Manuscript for the *International Journal of Intelligent Robotics and Applications* (Springer), in the
+Springer Nature LaTeX template (`sn-jnl.cls`, `sn-mathphys-num.bst`: numbered references, decimal headings).
 
-    latexmk -pdf main.tex
+    latexmk -pdf main.tex        # or: pdflatex main && bibtex main && pdflatex main && pdflatex main
 
-`main_sn.tex` is the same paper in the Springer Nature `sn-jnl` class. Download the Springer Nature LaTeX
-template (Overleaf: "Springer Nature LaTeX Template"), copy `sn-jnl.cls` and `sn-mathphys-num.bst` here, then
+| File | Content |
+|---|---|
+| `main.tex` | the whole manuscript (title page, abstract, body, declarations) |
+| `refs.bib` | bibliography; entries marked `% VERIFY` were written from memory, check them against the originals |
+| `sn-jnl.cls`, `sn-mathphys-num.bst` | Springer Nature template files (LPPL) |
+| `figures/` | Figs. 1, 3-6 (PDF for LaTeX, PNG for the README); made by `python scripts/paper_figures.py` |
+| `Nayak_GaitPhaseAware_QuadrupedSwarms.pdf` | compiled manuscript |
 
-    pdflatex main_sn && bibtex main_sn && pdflatex main_sn && pdflatex main_sn
-
-Both read the shared text from `abstract.tex`, `body.tex`, `declarations.tex` and `refs.bib`.
-Figures 1 and 3-6 are made by `python scripts/paper_figures.py` (from `results/` and `data/`);
-the stack diagram is TikZ inside `body.tex`. Table 3 numbers come from `python scripts/paper_tables.py`.
-Bibliography entries marked `% VERIFY` were written from memory: check them against the originals.
+Fig. 2 (the control stack) is drawn in TikZ inside `main.tex`. Table 3 comes from `python scripts/paper_tables.py`.

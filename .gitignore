@@ -49,3 +49,4 @@ paper/*.fdb_latexmk
 paper/*.blg
 paper/*.bbl
 paper/*.synctex.gz
+paper/main.pdf
