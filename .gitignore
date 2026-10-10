@@ -52,3 +52,4 @@ paper/*.bbl
 paper/*.synctex.gz
 paper/main.pdf
 paper.zip
+!docs/media/online_resource_1.mp4
