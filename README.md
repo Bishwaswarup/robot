@@ -1,50 +1,67 @@
-# Gait-Phase-Aware Command Timing for Decentralized Quadruped Swarms
+# Gait-Aware Command Timing for Decentralized Quadruped Swarms
 
 **Unitree Go1 · MuJoCo · ORCA · Bezier trot**
 
+[![Preprint DOI](https://img.shields.io/badge/preprint-10.21203%2Frs.3.rs--11332226%2Fv1-blue)](https://doi.org/10.21203/rs.3.rs-11332226/v1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)
 ![MuJoCo 3.2+](https://img.shields.io/badge/MuJoCo-3.2%2B-orange)
-![Status: preprint](https://img.shields.io/badge/paper-preprint-lightgrey)
 
 <p align="center">
   <img src="docs/media/swarm_swap16.gif" width="49%" alt="16 Go1 robots swapping positions through the centre">
   <img src="docs/media/swarm_gate.gif" width="49%" alt="Six-robot formation passing a narrow gate">
 </p>
 
+> **Paper:** Bishwaswarup Nayak, *Gait-Aware Command Timing for Decentralized Quadruped Swarms*.
+> Preprint, Research Square, 2026, under review.
+> [doi:10.21203/rs.3.rs-11332226/v1](https://doi.org/10.21203/rs.3.rs-11332226/v1) ·
+> LaTeX source in [`paper/`](paper/) · [Supplementary video](docs/media/online_resource_1.mp4) ·
+> [How to cite](#citation)
+
 Multi-robot collision avoidance usually treats each robot as a point that can change its velocity at any
 moment. A trotting quadruped cannot: how well it absorbs a new velocity command depends on **where in the
 gait cycle** the change arrives. This repository measures that dependence for a Bezier-curve trot
-controller on a simulated Unitree Go1 and uses it in a decentralized swarm:
+controller on a simulated Unitree Go1 and builds a decentralized swarm layer around it:
 
-- the swarm layer solves **ORCA one gait period ahead** (lookahead 0.36 s),
-- a **phase-aware commander** releases each new command at the gait phase that a measured capability map
-  predicts is least destabilizing,
-- a **gait-aware slew limiter** shapes the change, and
-- urgent conflicts (time to collision < 0.8 s, or < 1.5 s to a static obstacle) bypass the timing.
+- the swarm layer solves **ORCA one gait period ahead** (lookahead 0.36 s);
+- a **commander holds** each non-urgent velocity change for at most half a gait period (0.18 s) and
+  releases it at the **gait phase** a measured capability map predicts is least destabilizing;
+- a **gait-aware slew limiter** shapes the change;
+- urgent conflicts (time to collision < 0.8 s, or < 1.5 s to a static obstacle) bypass the hold.
 
-Every robot runs the same local rules; there is no central planner.
-
-> **Paper:** *Gait-Phase-Aware Command Timing for Decentralized Quadruped Swarms*, Bishwaswarup Nayak
-> (Indian Institute of Science), preprint, 2026. [PDF](paper/Nayak_GaitPhaseAware_QuadrupedSwarms.pdf) · LaTeX source in [`paper/`](paper/).
-> How to cite: [below](#citation).
+Every robot runs the same local rules; there is no central planner. All results are in simulation.
 
 ## Results at a glance
 
-Full system vs. the same stack without timing (reactive ORCA + slew limiter), 790 runs, paired by seed,
-sign-flip permutation tests with Holm correction over 21 primary tests:
+Paired by seed, exact sign-flip permutation tests, Holm-corrected within each comparison; 1,110 runs in the
+final configuration.
+
+**A. Full system vs. reactive baseline** (21 primary tests, 15 significant, 13 in favour of the full system)
 
 | | |
 |---|---|
-| Urgent avoidance events (crowded / obstructed scenarios) | **−22 to −39 %** |
-| 99th-percentile body tilt | **−19 to −24 %** |
+| Urgent avoidance events, crowded or obstructed scenarios (6, 9, 16, 32 robots) | **−22 to −39 %** |
+| 99th-percentile body tilt, same scenarios | **−19 to −24 %** |
 | Closest robot–robot distance in formations | **+4 to +8 %** (2–5 cm) |
 | Falls | **0** in 230 full-system runs (baseline: 2 in 170) |
+| Robot–robot / robot–obstacle contact onsets | 16 / 1 (baseline: 28 / 4) — fewer, **not eliminated** |
 | 53 m obstacle course, team of 6 | p99 tilt 7.95° → 6.68°, max tilt 18.3° → 13.7° |
-| Significant after Holm | 15 of 21 tests, 13 in favour of the full system |
 
-Prediction without phase timing gives no consistent benefit, so the timing is the active ingredient.
-In sparse traffic (four-robot swap) the method costs more than it saves (urgent events +109 %).
+**B and C. What does the work.** Holding a change and planning ahead, not the choice of phase, produces the
+reduction in urgent events: a control that holds for the same time but releases after a **random wait**
+reduces urgent events nearly as much as the full system (−27 % vs −30 % in the pillar field, −30 % vs −34 %
+at the gate). Choosing the
+phase the map predicts is safest adds a **smaller, consistent reduction in tilt** (−5.9 % p99 tilt against
+the random wait, pooled over 80 seed pairs; best phase < random wait < worst phase in every scenario).
+
+**Map in context.** The capability map predicts isolated command steps well (held-out R² 0.98) but not the
+rapid command sequences of a swarm (R² −0.99 on 488 replayed swarm events). Its phase ranking transfers only
+in part: its choice saves 0.21° of tilt against a random release on average, up to ~1° when the previous
+command change was at least a gait period earlier.
+
+**Where it does not help.** With four robots the method increases urgent events (+109 %); in the 8-robot swap
+it does not change them significantly. Collision avoidance is validated empirically, not guaranteed.
+
 Full tables: [`results/paper/paper_tables.md`](results/paper/paper_tables.md).
 
 ## Gallery
@@ -68,9 +85,15 @@ Full tables: [`results/paper/paper_tables.md`](results/paper/paper_tables.md).
   <img src="docs/media/go1_closeup.png" width="60%" alt="Unitree Go1 model in MuJoCo">
 </p>
 
-All media are rendered offscreen by [`scripts/make_media.py`](scripts/make_media.py) (about 15 min on a laptop).
+GIFs and stills are rendered offscreen by [`scripts/make_media.py`](scripts/make_media.py) (about 15 min on a laptop).
 To add your own (e.g. hardware photos or videos), drop the file in [`docs/media/`](docs/media/) and link it here:
 `<img src="docs/media/your_file.gif" width="100%">`.
+
+## Supplementary video
+
+[**Online Resource 1**](docs/media/online_resource_1.mp4) (MP4, 13 MB): reactive baseline and full system side
+by side in the 16-robot swap, the 9-robot formation through pillars, the 6-robot formation through the gate
+and the 6-robot team on the obstacle course (seed 0). Made by [`scripts/make_video.py`](scripts/make_video.py).
 
 ## Paper figures
 
@@ -86,8 +109,8 @@ phase at which it is released; (b) largest survivable push, relative to the best
 <details>
 <summary><b>Fig. 2 – Control stack</b></summary>
 
-Drawn in TikZ inside the paper ([`paper/main.tex`](paper/main.tex)): predictive ORCA → phase-aware commander →
-gait-aware slew limiter → Bezier trot controller, with the urgent bypass.
+Drawn in TikZ inside the paper ([`paper/main.tex`](paper/main.tex)): predictive ORCA → commander (hold ≤ 0.18 s,
+release at the best phase) → gait-aware slew limiter → Bezier trot controller, with the urgent bypass.
 </details>
 
 <details>
@@ -100,6 +123,9 @@ gait-aware slew limiter → Bezier trot controller, with the urgent bypass.
 <summary><b>Fig. 4 – Ablation: which component does the work</b></summary>
 
 <img src="paper/figures/fig4_ablation.png" alt="Ablation">
+
+Prediction alone does not help; adding the commander (hold and phase choice) produces most of the gain.
+Fig. 7 separates the hold from the phase choice.
 </details>
 
 <details>
@@ -116,6 +142,24 @@ Solving ORCA one gait period ahead lowers the share of urgent commands from 56 %
 <img src="paper/figures/fig6_course.png" alt="Course paths, baseline vs full">
 
 Pole slalom, gate, chicane, two timed moving obstacles and a pillar field (53 m), team of 6.
+</details>
+
+<details>
+<summary><b>Fig. 7 – Timing controls: the phase or the wait?</b></summary>
+
+<img src="paper/figures/fig7_controls.png" alt="Worst phase vs random wait vs best phase">
+
+All three are the full system with the same hold; they differ only in when the held change is released.
+Urgent events barely depend on it; p99 tilt is lowest at the map's best phase in every scenario.
+</details>
+
+<details>
+<summary><b>Fig. 8 – The capability map inside the swarm</b></summary>
+
+<img src="paper/figures/fig8_map_context.png" alt="Map predictions vs measurement in context">
+
+(a) Absolute predictions miss in context (bias −1.8°). (b) The map's phase choice still helps, most where
+events resemble its calibration.
 </details>
 
 ## Setup
@@ -166,9 +210,11 @@ print(robots[0].phase)                  # gait phase in [0, 1), used by the swar
 | 6. Obstacle course | `python scripts/course_eval.py --seeds 20 --speed 0.45 --robust` | `results/course/` |
 | 7. Tables | `python scripts/paper_tables.py` | `results/paper/paper_tables.md`, `primary_tests.csv` |
 | 8. Figures | `python scripts/paper_figures.py` | `paper/figures/*.pdf, *.png` |
-| 9. Media | `python scripts/make_media.py` | `docs/media/*.gif, *.png` |
+| 9. Timing controls (random / worst phase) | `python scripts/paper_runs.py --suites timing --robust` then `python scripts/timing_controls.py` | `results/paper/timing_robust/` |
+| 10. Map validation in context | `python scripts/map_validation.py` | `results/map_validation/` |
+| 11. Media and video | `python scripts/make_media.py`, `python scripts/make_video.py` | `docs/media/` |
 
-The maps in `data/` and the raw results in `results/` are included, so steps 7–9 run without re-simulating.
+The maps in `data/` and the raw results in `results/` are included, so steps 7 and 8 run without re-simulating.
 Step 5 takes several hours on one machine (`--quick` ≈ 15 min). Swarm configurations are written
 `layer:strategy[:q]`; the full system is `predictive:phase+gaslc_equal:q`, the baseline `reactive:limiter`.
 
@@ -192,7 +238,10 @@ Step 5 takes several hours on one machine (`--quick` ≈ 15 min). Swarm configur
 | `python scripts/paper_runs.py` | All paper swarm experiments (`--suites`, `--quick`, `--robust`) |
 | `python scripts/paper_tables.py` | Holm-corrected tables from the final runs |
 | `python scripts/paper_figures.py` | Paper figures |
+| `python scripts/timing_controls.py` | Full system vs random-wait and worst-phase controls |
+| `python scripts/map_validation.py` | Capability map scored on replayed swarm events (`--quick` ≈ 5 min) |
 | `python scripts/make_media.py` | README GIFs and stills (`--only trot,swap16,gate,course`) |
+| `python scripts/make_video.py` | Supplementary video (`--only gate` for one segment) |
 | `mjpython examples/trick_demo.py` | Height range, lie down/stand up, sit and wave |
 
 </details>
@@ -205,7 +254,8 @@ go1_bezier/        controller and swarm package
   gait.py            phase-clocked Bezier trot
   controller.py      velocity interface: slew limit, PI velocity loop, Raibert foot placement
   capability.py      CapabilityMap (tilt/fall vs. phase) and PushEnvelope
-  commander.py       PhaseAwareCommander: releases large changes at the best phase
+  commander.py       PhaseAwareCommander: holds large changes, releases at the best phase
+                     (random-wait and worst-phase rules for the controls)
   gasl.py            gait-aware slew limiter + strategy names
   orca.py            ORCA (port of RVO2's linear programs) with static disc obstacles
   swarm.py           SwarmAgent: predictive ORCA, keep-right, turn gate, local-minimum escape,
@@ -234,21 +284,26 @@ slew limit (1.5 m/s², 1.0 m/s², 3 rad/s²).
 
 ## Limitations
 
-Simulation only (MuJoCo, flat ground, perfect state estimation); one gait (trot) and one controller; the
-capability map is specific to this controller. Hardware validation is future work.
+- Simulation only (MuJoCo, flat ground, perfect state estimation, no sensing noise or delay).
+- One gait (trot) and one controller; the capability map must be re-measured for another controller.
+- The map is calibrated on isolated steps; inside the swarm its phase ranking holds only in part.
+- Collision avoidance is validated empirically, not guaranteed: contacts are reduced, not eliminated.
+- In sparse traffic the hold costs time and urgent events. Hardware validation is future work.
 
 ## Citation
 
-If you use this code, please cite the paper (GitHub's **"Cite this repository"** button reads
+If you use this code, please cite the preprint (GitHub's **"Cite this repository"** button reads
 [`CITATION.cff`](CITATION.cff)):
 
 ```bibtex
-@misc{nayak2026gaitphase,
-  author = {Nayak, Bishwaswarup},
-  title  = {Gait-Phase-Aware Command Timing for Decentralized Quadruped Swarms},
-  year   = {2026},
-  note   = {Preprint},
-  url    = {https://github.com/Bishwaswarup/robot}
+@misc{nayak2026gaitaware,
+  author    = {Nayak, Bishwaswarup},
+  title     = {Gait-Aware Command Timing for Decentralized Quadruped Swarms},
+  year      = {2026},
+  publisher = {Research Square},
+  note      = {Preprint},
+  doi       = {10.21203/rs.3.rs-11332226/v1},
+  url       = {https://doi.org/10.21203/rs.3.rs-11332226/v1}
 }
 ```
 

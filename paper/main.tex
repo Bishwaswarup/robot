@@ -110,9 +110,7 @@ Velocity commands to legged controllers are commonly rate-limited, and learned c
 curricula of command changes. A recent example schedules commands by the robot's current velocity to
 extend its top speed \cite{tao2026speed}; the aim there is the locomotion envelope of one robot. Our
 question differs in purpose: we choose \emph{when} a navigation-layer velocity change, issued for
-collision avoidance in a team, reaches the locomotion controller. To our knowledge, current multi-robot
-navigation approaches do not explicitly schedule the release of navigation-layer commands according to
-the gait phase of the receiving legged robot.
+collision avoidance in a team, reaches the locomotion controller. To the best of our knowledge, existing multi-robot navigation approaches do not explicitly schedule navigation-layer command release according to the gait phase of the receiving legged robot..
 
 \begin{table}[t]
   \centering
@@ -303,7 +301,7 @@ lists the scenarios and Table~\ref{tab:configs} the configurations.
 
 \begin{table}[t]
   \centering
-  \caption{Scenarios.}
+  \caption{Test scenarios: number of robots, layout and what each scenario tests.}
   \label{tab:scenarios}
   \small
   \begin{tabular}{@{}l p{22mm} p{52mm} p{30mm}@{}}
@@ -321,9 +319,9 @@ lists the scenarios and Table~\ref{tab:configs} the configurations.
 
 \begin{table}[t]
   \centering
-  \caption{Configurations. All share the safety layer of Section~\ref{sec:method}. The last two are controls:
-  they hold each change for the same window as the full system but release it after a uniformly random wait,
-  or at the phase the map predicts is worst.}
+  \caption{Swarm configurations compared in the experiments. All share the safety layer of
+  Section~\ref{sec:method}. The last two are controls: they hold each change for the same window as the full
+  system but release it after a uniformly random wait, or at the phase the map predicts is worst.}
   \label{tab:configs}
   \small
   \begin{tabular}{@{}lcccc@{}}
@@ -404,8 +402,9 @@ wait or at the map's worst phase isolates the phase choice itself (Section~\ref{
 
 \begin{table}[t]
   \centering
-  \caption{Primary metrics, baseline (B) against full system (F), means over seeds.
-  $^{*}$\,$p<0.05$, $^{**}$\,$p<0.01$ after Holm correction over all 21 tests.}
+  \caption{Primary results of the full system against the reactive baseline. Means over seeds for the
+  baseline (B) and the full system (F); $^{*}$\,$p<0.05$, $^{**}$\,$p<0.01$ after Holm correction over all
+  21 tests.}
   \label{tab:primary}
   \footnotesize
   \setlength{\tabcolsep}{3.2pt}
@@ -440,9 +439,9 @@ Section~\ref{sec:phase-or-wait} separates the two.
 
 \begin{table}[t]
   \centering
-  \caption{Comparison B: prediction with timing (P+T) against prediction alone (P), means over 20 seeds.
-  $^{*}$\,$p<0.05$, $^{**}$\,$p<0.01$ after Holm correction over these 12 tests. Closest distance changed by
-  $+1$ to $+5\%$, none significant.}
+  \caption{Contribution of phase timing (comparison B): prediction with timing (P+T) against prediction
+  alone (P), means over 20 seeds. $^{*}$\,$p<0.05$, $^{**}$\,$p<0.01$ after Holm correction over these 12
+  tests. Closest distance changed by $+1$ to $+5\%$, none significant.}
   \label{tab:timing}
   \small
   \begin{tabular}{@{}l rrr rrr@{}}
@@ -493,10 +492,10 @@ reduction in p99 tilt.
 
 \begin{table}[t]
   \centering
-  \caption{Comparison C: the full system (map's best phase) against a random wait from the same window and
-  against the map's worst phase, change in the full system, 20 seeds. $^{*}$\,$p<0.05$, $^{**}$\,$p<0.01$
-  after Holm correction over 24 tests (closest distance included; all its changes are within $\pm4\%$ and
-  not significant).}
+  \caption{Timing controls (comparison C): the full system (map's best phase) against a random wait from the
+  same window and against the map's worst phase, change in the full system, 20 seeds. $^{*}$\,$p<0.05$,
+  $^{**}$\,$p<0.01$ after Holm correction over 24 tests (closest distance included; all its changes are
+  within $\pm4\%$ and not significant).}
   \label{tab:controls}
   \small
   \begin{tabular}{@{}l rr rr@{}}
@@ -648,23 +647,29 @@ disables the hold in sparse traffic.
 
 \backmatter
 
+\bmhead{Supplementary information}
+Online Resource 1 (MP4) shows, side by side, the reactive baseline and the full system in the 16-robot swap,
+the nine-robot formation through pillars, the six-robot formation through the gate and the six-robot team
+on the obstacle course (seed 0).
+
 \bmhead{Acknowledgements}
 None.
 
 \section*{Declarations}
 
 \bmhead{Funding}
-The author did not receive support from any organization for the submitted work.
+No funding was received for conducting this study or for the preparation of this manuscript.
 
 \bmhead{Competing interests}
 The author has no relevant financial or non-financial interests to disclose.
 
 \bmhead{Use of AI-assisted tools}
-Claude (Anthropic) was used as an assistant for software development, experiment scripting, statistical
-analysis, drafting and editing of the manuscript text, and searching and checking references. The author
-conceived and directed the study, chose the methods and parameters, ran the experiments, interpreted the
-results, and reviewed and verified all code, results and text. The author takes full responsibility for the
-content of this manuscript.
+The author used Claude as an assistant for editing
+manuscript text, for auditing the numerical claims of the manuscript against the code
+output. The author conceived and directed
+the study, chose the models and parameters, ran all computations and interpreted
+the results, and reviewed and verified all AI-assisted text, including through the automated check of every number in the paper described below. The author takes full
+responsibility for the content of this manuscript.
 
 \bmhead{Data and code availability}
 The simulation code, configuration files, raw results and the scripts that produce every table and figure
@@ -683,12 +688,13 @@ Not applicable.
 
 \section{Holm correction of the primary tests}\label{app:holm}
 
-\begin{table}[h]
+\begin{table}[!htbp]
   \centering
-  \caption{All 21 primary tests (full system against the reactive baseline) in order of raw $p$-value, with
-  the Holm multiplier $22-k$ and the adjusted $p$-value (the running maximum of $(22-j)\,p_{(j)}$, $j \le k$).
-  Ranks 1--15 are significant at 0.05; the changes at ranks 7 and 8 (4-robot swap) favour the baseline.
-  Ties are ordered arbitrarily; tied tests receive the same adjusted value.}
+  \caption{Holm correction of the primary tests. All 21 tests of the full system against the reactive
+  baseline in order of raw $p$-value, with the Holm multiplier $22-k$ and the adjusted $p$-value (the running
+  maximum of $(22-j)\,p_{(j)}$, $j \le k$). Ranks 1--15 are significant at 0.05; the changes at ranks 7 and 8
+  (4-robot swap) favour the baseline. Ties are ordered arbitrarily; tied tests receive the same adjusted
+  value.}
   \label{tab:holm}
   \footnotesize
   \begin{tabular}{@{}rlrrlrrrr@{}}
@@ -722,6 +728,7 @@ Not applicable.
 
 \end{appendices}
 
+\clearpage
 \bibliography{refs}
 
 \end{document}

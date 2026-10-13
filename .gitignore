@@ -51,5 +51,8 @@ paper/*.blg
 paper/*.bbl
 paper/*.synctex.gz
 paper/main.pdf
-paper.zip
+paper*.zip
+# submission files that should not be public
+paper/cover_letter*
+paper/*.pdf
 !docs/media/online_resource_1.mp4

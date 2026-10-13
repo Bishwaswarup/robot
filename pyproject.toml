@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "go1-bezier"
-version = "0.1.0"
-description = "Bezier-trot low-level controller and pose control for Unitree Go1 in MuJoCo (base for gait-aware quadruped swarm research)"
+version = "1.1.0"
+description = "Gait-aware command timing for decentralized quadruped swarms: Bezier-trot controller, capability map and swarm layer for Unitree Go1 in MuJoCo"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }

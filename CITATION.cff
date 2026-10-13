@@ -1,16 +1,17 @@
 cff-version: 1.2.0
-message: "If you use this software or its results, please cite the paper below (preferred-citation) and/or this repository."
-title: "Gait-phase-aware command timing for decentralized quadruped swarms (Unitree Go1, MuJoCo)"
+message: "If you use this software or its results, please cite the preprint below (preferred-citation) and/or this repository."
+title: "Gait-aware command timing for decentralized quadruped swarms (Unitree Go1, MuJoCo)"
 type: software
 authors:
   - given-names: Bishwaswarup
     family-names: Nayak
     email: bishwaswarup@iisc.ac.in
     affiliation: "Indian Institute of Science, Bengaluru, India"
+    orcid: "https://orcid.org/0009-0001-9926-5329"
 repository-code: "https://github.com/Bishwaswarup/robot"
 license: MIT
-version: "1.0.0"
-date-released: "2026-10-10"
+version: "1.1.0"
+date-released: "2026-10-13"
 keywords:
   - quadruped robots
   - multi-robot systems
@@ -22,21 +23,26 @@ keywords:
   - MuJoCo
   - Unitree Go1
 abstract: >-
-  Decentralized navigation for teams of trotting quadrupeds that accounts for the gait phase.
-  A Bezier-curve trot controller for the simulated Unitree Go1 exposes its gait phase; a measured
-  capability map predicts how strongly a velocity change destabilizes the robot at each phase.
-  The swarm layer solves reciprocal collision avoidance (ORCA) one gait period ahead, releases
-  each new command at the least destabilizing phase and shapes it with a gait-aware slew limiter,
-  while urgent conflicts bypass the timing. Includes all experiment scripts, raw results and the
-  scripts that reproduce every table and figure of the paper.
+  Decentralized navigation for teams of trotting quadrupeds that accounts for the gait phase. A
+  Bezier-curve trot controller for the simulated Unitree Go1 exposes its gait phase, and a measured
+  capability map predicts how strongly a velocity change destabilizes the robot at each phase. The swarm
+  layer solves reciprocal collision avoidance (ORCA) one gait period ahead, holds each non-urgent change
+  for at most half a gait period, releases it at the phase the map predicts is safest and shapes it with
+  a gait-aware slew limiter; urgent conflicts bypass the hold. Controls show that planning ahead and the
+  bounded hold produce the reduction in urgent avoidance events, while the phase choice adds a smaller
+  reduction in body tilt. Includes all experiment scripts, raw results and the scripts that reproduce
+  every table and figure of the paper.
 preferred-citation:
   type: article
-  title: "Gait-Phase-Aware Command Timing for Decentralized Quadruped Swarms"
+  title: "Gait-Aware Command Timing for Decentralized Quadruped Swarms"
   authors:
     - given-names: Bishwaswarup
       family-names: Nayak
       affiliation: "Indian Institute of Science, Bengaluru, India"
+      orcid: "https://orcid.org/0009-0001-9926-5329"
   year: 2026
   status: preprint
-  notes: "Preprint; under review. Update with the DOI once available."
-  url: "https://github.com/Bishwaswarup/robot"
+  publisher:
+    name: "Research Square"
+  doi: "10.21203/rs.3.rs-11332226/v1"
+  url: "https://doi.org/10.21203/rs.3.rs-11332226/v1"
